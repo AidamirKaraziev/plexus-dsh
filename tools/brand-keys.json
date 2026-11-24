@@ -1,0 +1,6 @@
+{
+  "пакеты": {
+    "budget": "kind источника уведомления модели (MessageSourceMap)",
+    "hello": "имя события в журнале сессии (SessionEventMap)"
+  }
+}

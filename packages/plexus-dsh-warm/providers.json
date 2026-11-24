@@ -1,0 +1,44 @@
+{
+  "glm-5.3": {
+    "provider": "opencode-go",
+    "ttlMin": 6,
+    "ttlMaxMin": 10,
+    "pingEveryMin": 4.5,
+    "maxPauseMin": 25,
+    "price": [
+      1.4,
+      0.26,
+      0.0,
+      4.4
+    ],
+    "source": "vault/замеры/Кэш GLM-5.3 через Go живёт 6–10 минут, пинг его держит.md"
+  },
+  "kimi-k3": {
+    "provider": "opencode-go",
+    "ttlMin": 6,
+    "ttlMaxMin": 10,
+    "pingEveryMin": 4.5,
+    "maxPauseMin": 25,
+    "price": [
+      3.0,
+      0.3,
+      0.0,
+      15.0
+    ],
+    "source": "vault/замеры/TTL кэша Go по моделям — kimi-k3 и qwen3.8-max.md"
+  },
+  "qwen3.8-max": {
+    "provider": "opencode-go",
+    "ttlMin": 4.5,
+    "ttlMaxMin": 10,
+    "pingEveryMin": 3.5,
+    "maxPauseMin": 25,
+    "price": [
+      2.0,
+      0.25,
+      2.5,
+      6.0
+    ],
+    "source": "vault/замеры/TTL кэша Go по моделям — kimi-k3 и qwen3.8-max.md"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "@plexus-dsh/warm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "description": "В паузе человека повторяет последний запрос модели раз в pingEveryMin, пока кэш провайдера жив, — новый ход не платит за перезапись префикса.",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**",
+    "src/**/*.ts",
+    "locale/*.json",
+    "README.md",
+    "providers.json"
+  ],
+  "engines": {
+    "dsh": "0.2.2-rc.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0"
+  },
+  "plexus": {
+    "id": "plexus-dsh-warm",
+    "config": {
+      "minContextTokens": 30000
+    },
+    "bundle": {
+      "build": true
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

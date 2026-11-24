@@ -1,0 +1,13 @@
+{
+  "name": "@plexus-dsh/NAME",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ОПИСАНИЕ",
+  "main": "./lib/index.js",
+  "scripts": { "build": "tsc -b" },
+  "plexus": {
+    "id": "plexus-dsh-NAME",
+    "config": {}
+  }
+}

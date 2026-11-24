@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "title": "Large reads cap",
+    "description": "Results of read, grep and bash above the threshold are cut at the moment they arrive: head and tail plus a hint on how to read the rest.",
+    "detail": "README.md"
+  },
+  "config": {
+    "maxTokens": "Result threshold, tokens",
+    "tools": "Tools to cut",
+    "headShare": "Share of the budget for the head, the rest goes to the tail"
+  }
+}

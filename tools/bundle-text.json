@@ -1,0 +1,154 @@
+{
+  "meter": {
+    "ru": {
+      "title": "Счётчик окна",
+      "description": "После каждого хода — $ и % окна за 5 ч по всем сессиям DSH в журнал учёта.",
+      "config": {
+        "profile": "Метка профиля в строке журнала; пусто — имя профиля DSH",
+        "windowHours": "Окно лимита, часы",
+        "budgetUsd": "Бюджет окна, $",
+        "log": "Журнал учёта (по умолчанию ~/.plexus-dsh/usage.jsonl)",
+        "sessionsDir": "Корень сессий DSH (по умолчанию ~/.dsh/sessions)",
+        "prices": "Цены по id модели, перекрывают встроенные"
+      }
+    },
+    "en": {
+      "title": "Window meter",
+      "description": "After every turn, writes dollars and window usage over 5 h across all DSH sessions to the usage log.",
+      "config": {
+        "profile": "Profile label in the log row; empty means the DSH profile name",
+        "windowHours": "Limit window, hours",
+        "budgetUsd": "Window budget, USD",
+        "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
+        "sessionsDir": "DSH sessions root (default ~/.dsh/sessions)",
+        "prices": "Per-model prices overriding the built-in table"
+      }
+    }
+  },
+  "warm": {
+    "ru": {
+      "title": "Тёплый кэш",
+      "description": "В паузе человека повторяет последний запрос модели раз в pingEveryMin, пока кэш провайдера жив, — новый ход не платит за перезапись префикса.",
+      "config": {
+        "profile": "Метка профиля в строке журнала; пусто — имя профиля DSH",
+        "minContextTokens": "Не пинговать, если контекст меньше, токенов",
+        "pingEveryMin": "Интервал пинга, мин (по умолчанию — по модели)",
+        "maxPauseMin": "Сколько паузы держать кэш, мин (по умолчанию — по модели)",
+        "live": "Слать пинг на самом деле (false — только запись в лог)",
+        "log": "Журнал учёта (по умолчанию ~/.plexus-dsh/usage.jsonl)",
+        "providers": "Параметры провайдеров, перекрывают providers.json"
+      }
+    },
+    "en": {
+      "title": "Warm cache",
+      "description": "During a human pause, repeats the last model request every pingEveryMin while the provider cache is alive, so the next turn does not pay to rewrite the prefix.",
+      "config": {
+        "profile": "Profile label in the log row; empty means the DSH profile name",
+        "minContextTokens": "Skip pinging when the context is smaller than this many tokens",
+        "pingEveryMin": "Ping interval, minutes (per model by default)",
+        "maxPauseMin": "How long a pause keeps the cache, minutes (per model by default)",
+        "live": "Really send the ping (false logs only)",
+        "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
+        "providers": "Provider parameters overriding providers.json"
+      }
+    }
+  },
+  "read-cap": {
+    "ru": {
+      "title": "Обрезка больших чтений",
+      "description": "Результаты read, grep и bash длиннее порога режутся в момент результата: голова и хвост плюс подсказка, как дочитать.",
+      "config": {
+        "maxTokens": "Порог результата, токенов",
+        "tools": "Какие инструменты резать",
+        "headShare": "Доля бюджета на голову, остальное — хвост"
+      }
+    },
+    "en": {
+      "title": "Large reads cap",
+      "description": "Results of read, grep and bash above the threshold are cut at the moment they arrive: head and tail plus a hint on how to read the rest.",
+      "config": {
+        "maxTokens": "Result threshold, tokens",
+        "tools": "Tools to cut",
+        "headShare": "Share of the budget for the head, the rest goes to the tail"
+      }
+    }
+  },
+  "scout": {
+    "ru": {
+      "title": "Разведчик",
+      "description": "Инструмент scout: поиск и чтение в дочернем процессе на дешёвой модели; родителю — только итог, расход ребёнка — отдельной строкой журнала.",
+      "config": {
+        "provider": "Провайдер ребёнка",
+        "model": "Модель ребёнка",
+        "subagentProvider": "Провайдер ctx.subagents",
+        "briefTokens": "Потолок брифа от родителя, токенов",
+        "resultTokens": "Потолок итога для родителя, токенов",
+        "childMaxTokens": "Потолок вывода ребёнка за шаг, токенов",
+        "profile": "Метка профиля в строке журнала; пусто — имя профиля DSH",
+        "log": "Журнал учёта (по умолчанию ~/.plexus-dsh/usage.jsonl)",
+        "prices": "Цены по id модели, перекрывают встроенные"
+      }
+    },
+    "en": {
+      "title": "Scout",
+      "description": "The scout tool: search and read in a child process on a cheap model; the parent gets only the result, the child's spend goes to its own log row.",
+      "config": {
+        "provider": "Child provider",
+        "model": "Child model",
+        "subagentProvider": "Provider for ctx.subagents",
+        "briefTokens": "Brief cap from the parent, tokens",
+        "resultTokens": "Result cap for the parent, tokens",
+        "childMaxTokens": "Child output cap per step, tokens",
+        "profile": "Profile label in the log row; empty means the DSH profile name",
+        "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
+        "prices": "Per-model prices overriding the built-in table"
+      }
+    }
+  },
+  "budget": {
+    "ru": {
+      "title": "Стоп-кран",
+      "description": "Предупреждает модель при подходе к бюджету и останавливает ход при его исчерпании, переполненном окне или шагах без прогресса.",
+      "config": {
+        "profile": "Метка профиля в строке журнала",
+        "budgetUsd": "Бюджет сессии, $ (0 — без бюджета)",
+        "warnPct": "Доля бюджета для предупреждения, %",
+        "windowPct": "Порог окна лимита, %",
+        "noProgressSteps": "Шагов подряд без прогресса до стопа (0 — выкл.)",
+        "repeatErrors": "Повторов одной и той же ошибки до стопа (0 — выкл.)",
+        "log": "Журнал учёта (по умолчанию ~/.plexus-dsh/usage.jsonl)",
+        "prices": "Цены по id модели, перекрывают встроенные"
+      }
+    },
+    "en": {
+      "title": "Budget brake",
+      "description": "Warns the model as the budget nears its limit and stops the turn when the budget is spent, the window is full, or steps stop making progress.",
+      "config": {
+        "profile": "Profile label in the log row",
+        "budgetUsd": "Session budget, USD (0 — no budget)",
+        "warnPct": "Share of the budget that triggers the warning, %",
+        "windowPct": "Limit window threshold, %",
+        "noProgressSteps": "Steps without progress before the stop (0 — off)",
+        "repeatErrors": "Repeats of one tool error before the stop (0 — off)",
+        "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
+        "prices": "Per-model prices overriding the built-in table"
+      }
+    }
+  },
+  "hello": {
+    "ru": {
+      "title": "Проверка каркаса",
+      "description": "На конец хода пишет событие в журнал сессии DSH — дым, что плагин загружен и слышит хуки.",
+      "config": {
+        "label": "Метка в событии, чтобы отличать профили"
+      }
+    },
+    "en": {
+      "title": "Skeleton check",
+      "description": "Writes an event to the DSH session journal at the end of every turn — a smoke test that the plugin is loaded and hears the hooks.",
+      "config": {
+        "label": "Label inside the event to tell profiles apart"
+      }
+    }
+  }
+}

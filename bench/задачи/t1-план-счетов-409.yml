@@ -1,0 +1,31 @@
+id: t1-план-счетов-409
+размер: малая
+бюджет_usd: 7  # ≈ 1,5 × база $4,68 (сессия 53a87da9); plexus-dsh-budget в профилях e04/e05
+репо: TalismanOnline
+репо_путь: ~/Projects/TalismanOnline
+снимок: e9ef73e55   # до решения
+эталон: 9276d87e1   # fix(materialoperations): без текущего плана счетов фильтр счетов группы отвечает 409, а не 500
+задание: |
+  В backend TalismanOnline (Go) ручка GET …/groups/{id}/accounts модуля
+  accounting/materialoperations падает 500, если на рабочую дату не задан текущий
+  план счетов (пустая accounting.accounts_defaults: порт плана счетов возвращает
+  accounts.ErrNoCurrentPlan).
+
+  Сделай понятный отказ 409:
+  - в пакете materialoperations объяви ошибку `ErrNoCurrentPlan` класса Conflict
+    (обёртка над errs.ErrConflict, рядом с остальными в errors.go);
+  - сборка local-server (backend/cmd/local-server/materialoperations.go,
+    typicalAccounts.CardAccountCandidates) переводит accounts.ErrNoCurrentPlan в
+    materialoperations.ErrNoCurrentPlan, сохраняя исходную ошибку в цепочке;
+  - ручки модуля отвечают на неё 409 с кодом `no_current_plan` и текстом
+    «На рабочую дату не задан текущий план счетов (ACCOUNTS_DEFAULTS)»;
+  - в OpenAPI ручки фильтра счетов группы добавь ответ 409 (contracts/ и копия в
+    backend/internal/localapi/openapi), сгенерированный клиент фронта обнови тоже.
+  Добавь тест ручки на этот случай. Проверка:
+  `cd backend && go build ./... && go test ./internal/modules/accounting/materialoperations/...`.
+скрытые_тесты:
+  - backend/internal/modules/accounting/materialoperations/api/handlers_test.go
+проверка: |
+  cd backend
+  go build ./...
+  go test -count=1 ./internal/modules/accounting/materialoperations/ ./internal/modules/accounting/materialoperations/api/

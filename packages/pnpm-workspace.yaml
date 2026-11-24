@@ -1,0 +1,6 @@
+# Пакеты Plexus DSH: каждый plexus-dsh-*/ — один плагин Cordis. _template не собирается.
+packages:
+  - 'plexus-dsh-*'
+
+nodeLinker: hoisted
+autoInstallPeers: false

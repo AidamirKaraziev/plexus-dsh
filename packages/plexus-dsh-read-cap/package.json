@@ -1,0 +1,45 @@
+{
+  "name": "@plexus-dsh/read-cap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "description": "Результаты read, grep и bash длиннее порога режутся в момент результата: голова и хвост плюс подсказка, как дочитать.",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**",
+    "src/**/*.ts",
+    "locale/*.json",
+    "README.md"
+  ],
+  "engines": {
+    "dsh": "0.2.2-rc.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0"
+  },
+  "plexus": {
+    "id": "plexus-dsh-read-cap",
+    "config": {
+      "maxTokens": 6000,
+      "tools": [
+        "read",
+        "grep",
+        "bash"
+      ]
+    },
+    "bundle": {
+      "build": true
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

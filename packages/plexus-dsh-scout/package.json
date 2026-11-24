@@ -1,0 +1,44 @@
+{
+  "name": "@plexus-dsh/scout",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "description": "Инструмент scout: поиск и чтение в дочернем процессе на дешёвой модели; родителю — только итог, расход ребёнка — отдельной строкой журнала.",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**",
+    "src/**/*.ts",
+    "locale/*.json",
+    "README.md"
+  ],
+  "engines": {
+    "dsh": "0.2.2-rc.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0"
+  },
+  "plexus": {
+    "id": "plexus-dsh-scout",
+    "config": {
+      "provider": "opencode-go",
+      "model": "glm-5.3-flash",
+      "briefTokens": 3000,
+      "resultTokens": 2000
+    },
+    "bundle": {
+      "build": true
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "tsc -b && node --test test/*.test.mjs"
+  }
+}

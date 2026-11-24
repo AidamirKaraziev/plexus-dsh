@@ -1,0 +1,25 @@
+# Сгенерировано tools/bundle.mjs — правки затрутся на сборке.
+# Строка на каждый пакет, у которого plexus.bundle.build не false; config — значения по умолчанию
+# из plexus.config пакета: форма настроек показывает их как default и без них валидация не пройдёт.
+- insert:
+    - id: plexus-dsh-meter
+      name: "@plexus-dsh/meter"
+      config:
+        windowHours: 5
+        budgetUsd: 12
+    - id: plexus-dsh-warm
+      name: "@plexus-dsh/warm"
+      config:
+        minContextTokens: 30000
+    - id: plexus-dsh-read-cap
+      name: "@plexus-dsh/read-cap"
+      config:
+        maxTokens: 6000
+        tools: ["read","grep","bash"]
+    - id: plexus-dsh-scout
+      name: "@plexus-dsh/scout"
+      config:
+        provider: "opencode-go"
+        model: "glm-5.3-flash"
+        briefTokens: 3000
+        resultTokens: 2000

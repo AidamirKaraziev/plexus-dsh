@@ -1,0 +1,16 @@
+{
+  "meta": {
+    "title": "Warm cache",
+    "description": "During a human pause, repeats the last model request every pingEveryMin while the provider cache is alive, so the next turn does not pay to rewrite the prefix.",
+    "detail": "README.md"
+  },
+  "config": {
+    "profile": "Profile label in the log row; empty means the DSH profile name",
+    "minContextTokens": "Skip pinging when the context is smaller than this many tokens",
+    "pingEveryMin": "Ping interval, minutes (per model by default)",
+    "maxPauseMin": "How long a pause keeps the cache, minutes (per model by default)",
+    "live": "Really send the ping (false logs only)",
+    "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
+    "providers": "Provider parameters overriding providers.json"
+  }
+}

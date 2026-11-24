@@ -1,0 +1,10 @@
+{
+  "meta": {
+    "title": "Skeleton check",
+    "description": "Writes an event to the DSH session journal at the end of every turn — a smoke test that the plugin is loaded and hears the hooks.",
+    "detail": "README.md"
+  },
+  "config": {
+    "label": "Label inside the event to tell profiles apart"
+  }
+}

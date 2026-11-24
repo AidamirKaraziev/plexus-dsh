@@ -1,0 +1,15 @@
+{
+  "meta": {
+    "title": "Window meter",
+    "description": "After every turn, writes dollars and window usage over 5 h across all DSH sessions to the usage log.",
+    "detail": "README.md"
+  },
+  "config": {
+    "profile": "Profile label in the log row; empty means the DSH profile name",
+    "windowHours": "Limit window, hours",
+    "budgetUsd": "Window budget, USD",
+    "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
+    "sessionsDir": "DSH sessions root (default ~/.dsh/sessions)",
+    "prices": "Per-model prices overriding the built-in table"
+  }
+}

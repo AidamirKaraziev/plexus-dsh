@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "title": "Budget brake",
+    "description": "Warns the model as the budget nears its limit and stops the turn when the budget is spent, the window is full, or steps stop making progress.",
+    "detail": "README.md"
+  },
+  "config": {
+    "profile": "Profile label in the log row",
+    "budgetUsd": "Session budget, USD (0 — no budget)",
+    "warnPct": "Share of the budget that triggers the warning, %",
+    "windowPct": "Limit window threshold, %",
+    "noProgressSteps": "Steps without progress before the stop (0 — off)",
+    "repeatErrors": "Repeats of one tool error before the stop (0 — off)",
+    "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
+    "prices": "Per-model prices overriding the built-in table"
+  }
+}

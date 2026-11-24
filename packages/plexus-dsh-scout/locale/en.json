@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "Scout",
+    "description": "The scout tool: search and read in a child process on a cheap model; the parent gets only the result, the child's spend goes to its own log row.",
+    "detail": "README.md"
+  },
+  "config": {
+    "provider": "Child provider",
+    "model": "Child model",
+    "subagentProvider": "Provider for ctx.subagents",
+    "briefTokens": "Brief cap from the parent, tokens",
+    "resultTokens": "Result cap for the parent, tokens",
+    "childMaxTokens": "Child output cap per step, tokens",
+    "profile": "Profile label in the log row; empty means the DSH profile name",
+    "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
+    "prices": "Per-model prices overriding the built-in table"
+  }
+}

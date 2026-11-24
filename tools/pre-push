@@ -1,0 +1,4 @@
+#!/bin/bash
+# Хук pre-push мастерской: сторож утечек до отправки. Ставит человек: cp tools/pre-push .git/hooks/pre-push
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+"$ROOT/выпустить.sh" --проверка || { echo "push остановлен: утечка"; exit 1; }

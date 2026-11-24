@@ -1,0 +1,42 @@
+{
+  "name": "@plexus-dsh/bundle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Пакеты Plexus DSH одним бандлом: метр, тёплый кэш, обрезка чтений и разведчик ставятся DSH одной строкой.",
+  "exports": {
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./detail/*": "./detail/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "detail/*.md"
+  ],
+  "engines": {
+    "dsh": "0.2.2-rc.5"
+  },
+  "dependencies": {
+    "@plexus-dsh/meter": "workspace:*",
+    "@plexus-dsh/read-cap": "workspace:*",
+    "@plexus-dsh/scout": "workspace:*",
+    "@plexus-dsh/warm": "workspace:*"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node ../../tools/bundle.mjs патч"
+  },
+  "bundledDependencies": [
+    "@plexus-dsh/meter",
+    "@plexus-dsh/read-cap",
+    "@plexus-dsh/scout",
+    "@plexus-dsh/warm"
+  ]
+}

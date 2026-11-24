@@ -1,0 +1,6 @@
+node_modules/
+lib/
+# генерируется tools/brandinfo.mjs; имя продукта — только в tools/dsh_digest.py
+plexus-dsh-*/src/brand.json
+*.tsbuildinfo
+.cordis/

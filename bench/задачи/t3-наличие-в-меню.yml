@@ -1,0 +1,44 @@
+id: t3-наличие-в-меню
+размер: средняя
+репо: TalismanOnline
+репо_путь: ~/Projects/TalismanOnline
+снимок: 627478a87   # до решения
+эталон: e9ce0ffc3   # feat(питание): «Наличие» в расшифровке блюда меню-требования
+задание: |
+  В backend TalismanOnline (Go), модуль food/menudemand: в расшифровке блюда
+  меню-требования нужна колонка «Наличие» — остаток продукта на складе в граммах
+  на конец даты документа по организации и МОЛ склада из шапки. Источник —
+  оборотная ведомость питания (food/turnover), единицы — assets/measurementunits.
+  Только backend, фронт не трогай.
+
+  Что должно появиться (имена обязательны — по ним гоняются тесты):
+  - в пакете menudemand: `StockQuery{InstitutionID int64; Date time.Time; OrgID, MolID int64; ProductIDs []int64}`,
+    порт `Stock` с методом `ProductStock(ctx, StockQuery) (map[int64]decimal.Decimal, error)`,
+    поле `Line.Stock *decimal.Decimal` (nil — остаток не считался);
+  - `(*Service).WithStock(Stock) *Service` и `(*Service).fillStock(ctx, Menu, []Line) error`:
+    один запрос на уникальные продукты строк, учреждение/дата/организация/МОЛ из меню;
+    продукта нет в ответе — 0; порт не подключён — Stock остаётся nil, без ошибки;
+    расшифровка блюда заполняет «Наличие» через fillStock;
+  - новый пакет menudemand/stock — адаптер без SQL: `New(t Turnover, u Units) *Reader`
+    (Turnover — `Turnover(ctx, turnover.Query) ([]turnover.Row, error)`, Units —
+    `Get(ctx, id int64) (measurementunits.Item, error)`), `(*Reader).ProductStock`:
+    запрос ведомости DateFrom=DateTo=дата, OrgIDs=[OrgID], MolIDs=[MolID],
+    CollapseAccs/CollapseMols/CollapseOrgs=true, OnlyTurnover=false; суммирует Closing.Count
+    по продукту, переводя в граммы; `(*Reader).ValidateConfiguration() error`;
+    `GramsFactor(measurementunits.Item) decimal.Decimal` — 1000 для кг, 1000000 для т,
+    1 для г и прочих (по ОКЕИ 166/168/163 или по обозначению без учёта регистра и точки);
+  - `module.Module(stock menudemand.Stock)` — nil допустим; при наличии проверяет
+    ValidateConfiguration и подключает WithStock; registry.MaterialBindings.FoodMenuStock
+    передаётся в Module; local-server собирает адаптер над food/turnover и единицами;
+  - DTO строки расшифровки: поле `stock` (строка или null); OpenAPI (contracts/ и копия в backend) — тоже.
+  Тесты на fillStock и на адаптер добавь сам. Проверка:
+  `cd backend && go build ./... && go test ./internal/modules/food/menudemand/...`.
+скрытые_тесты:
+  - backend/internal/modules/food/menudemand/service_test.go
+  - backend/internal/modules/food/menudemand/module/module_test.go
+  - backend/internal/modules/food/menudemand/stock/stock_test.go
+проверка: |
+  cd backend
+  go build ./...
+  go vet ./internal/modules/food/menudemand/... ./internal/modules/registry/ ./cmd/local-server/
+  go test -count=1 ./internal/modules/food/menudemand/ ./internal/modules/food/menudemand/stock/ ./internal/modules/food/menudemand/module/ ./internal/modules/food/menudemand/api/
