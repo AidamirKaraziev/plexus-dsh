@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Прогонщик эталона продукта: задача → worktree со снимка → DSH headless с паузами → проверка → строка в results.jsonl.
 
-    python3 tools/bench.py run --tasks t1[,t2…] --profile base|warm|e04|e05 [--transport acp|proc] [--pause 7m×2] [--handoff] [--dry-run] [--keep]
+    python3 tools/bench.py run --tasks t1[,t2…] --profile base|warm|e04|e05|market [--transport acp|proc] [--pause 7m×2] [--handoff] [--dry-run] [--keep]
     python3 tools/bench.py compare --tasks t1[,t2…] --profiles base,warm
 
 Ход 1 — задание из yml; дальше между ходами пауза (имитация человека, по умолчанию 2×7 мин), ход
@@ -20,6 +20,9 @@
 --profile e04 — профиль bench-e04: bench-base + meter + warm + read-cap + порог компакции
 (COMPACTION["e04"] → блок `- id: compaction-basic` в cordis.patch.yml профиля).
 --profile e05 — профиль bench-e05: e04 + scout (инструмент scout, ребёнок на glm-5.3-flash; E05-S03).
+
+--profile market — профиль bench-market: пакеты продукта (@plexus-dsh/bundle, @plexus-dsh/plexus) установлены из индекса маркета, а не install.sh;
+создаётся и пересоздаётся только tools/проверка_маркета.py (здесь профиль берётся готовый).
 
 --transport acp (по умолчанию для base и warm, чтобы они шли одинаково): один процесс DSH на сессию
 этапа, ходы и паузы внутри него (ACP, JSON-RPC по stdio; профиль <dsh>-acp = тот же профиль с бандлом
@@ -63,7 +66,9 @@ PROFILES = {"base": {"dsh": "bench-base", "packages": None},
                     "compaction": "e04", "budget": "e04"},
             # E05 = e04 + scout (разведчик на glm-5.3-flash)
             "e05": {"dsh": "bench-e05", "packages": " ".join(map(пакет, ("meter", "warm", "read-cap", "scout", "budget"))),
-                    "compaction": "e04", "budget": "e04"}}
+                    "compaction": "e04", "budget": "e04"},
+            # market = пакеты из индекса маркета (tools/проверка_маркета.py создаёт профиль заново)
+            "market": {"dsh": "bench-market", "packages": None, "готовый": True}}
 # Порог компакции dsh-compaction-basic (DSH 0.2.2-rc.5). Порог задаётся только долей окна:
 # trigger = floor(min(W × thresholdRatio, W − O − headroomTokens)); у glm-5.3 W = 1M, O = 131K, поэтому
 # по умолчанию (0.8) порог 800K и база t1 до 171K не компактится. Доля считается от окна 1M (CTX_WINDOW):
@@ -92,6 +97,10 @@ def профиль_dsh(имя: str, бюджет: float | None = None) -> str:
     """Профиль DSH для эталона. base: `bench-base` — копия headless без вставок продукта (только провайдер
     и модель); уже есть — не трогаем. warm: `bench-warm` ставит tools/install.sh из bench-base."""
     dst = DSH_HOME / PROFILES[имя]["dsh"]
+    if PROFILES[имя].get("готовый"):
+        if not (dst / "cordis.patch.yml").exists():
+            raise SystemExit(f"✘ профиля {dst.name} нет: создайте его python3 tools/проверка_маркета.py")
+        return dst.name
     пакеты = PROFILES[имя]["packages"]
     if пакеты:
         профиль_dsh("base")
@@ -162,6 +171,10 @@ def профиль_acp(dsh_проф: str) -> str:
     # пакеты продукта хранят в config имя профиля — переписать на ACP-профиль (журнал usage.jsonl)
     патч = patch_name(патч, dsh_проф, dst.name)
     (dst / "cordis.patch.yml").write_text(патч.rstrip("\n") + "\n" + ACP_TAIL, encoding="utf-8")
+    # пакеты, поставленные через `dsh plugin add` (профиль market), живут в node_modules профиля
+    if (src / "node_modules").is_dir():
+        shutil.rmtree(dst / "node_modules", ignore_errors=True)
+        shutil.copytree(src / "node_modules", dst / "node_modules", symlinks=True)
     return dst.name
 
 

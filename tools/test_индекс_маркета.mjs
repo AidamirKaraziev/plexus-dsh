@@ -11,7 +11,6 @@ import { fileURLToPath } from 'node:url'
 const ТУТ = dirname(fileURLToPath(import.meta.url))
 const СКРИПТ = join(ТУТ, 'индекс_маркета.mjs')
 const ФИКСТУРЫ = join(ТУТ, 'фикстуры', 'маркет')
-const SHA = '0123456789abcdef0123456789abcdef01234567'
 
 // Свежая копия фикстур, чтобы каждый тест ломал своё.
 function копия() {
@@ -35,7 +34,8 @@ test('валидный индекс собирается и проходит --�
     assert.equal(р.status, 0, р.stderr)
     const индекс = JSON.parse(readFileSync(к.выход, 'utf8'))
     assert.equal(indexFormat(индекс), 1)
-    const [бандл, адаптер] = индекс.plugins
+    const [бандл, плексус] = индекс.plugins
+    assert.equal(индекс.plugins.length, 2)
     assert.equal(бандл.name, '@plexus-dsh/bundle')
     assert.deepEqual(бандл.versions[0].source, { type: 'npm' })
     assert.equal(бандл.versions[0].version, '0.1.1')
@@ -44,9 +44,12 @@ test('валидный индекс собирается и проходит --�
     assert.equal(бандл.title.en, 'Plexus DSH')
     assert.ok(бандл.description.ru)
     assert.match(бандл.icon, /^data:image\/svg\+xml;base64,/)
-    assert.deepEqual(адаптер.versions[0].source, {
-      type: 'git', url: 'https://github.com/AidamirKaraziev/plexus', commit: SHA, path: 'bundles/plexus-workers',
-    })
+    assert.equal(плексус.name, '@plexus-dsh/plexus')
+    assert.equal(плексус.versions[0].version, '2.11.3')
+    assert.deepEqual(плексус.versions[0].source, { type: 'npm' })
+    assert.equal(плексус.versions[0].engines.dsh, '0.2.2-rc.5')
+    assert.equal(плексус.versions[0].publishTimestamp, Math.floor(Date.parse('2026-11-25T18:41:24.892Z') / 1000))
+    assert.ok(!JSON.stringify(индекс).includes('plexus-workers'))
     const п = запуск('--проверка', к.выход)
     assert.equal(п.status, 0, п.stderr)
   } finally { rmSync(к.каталог, { recursive: true, force: true }) }
@@ -66,32 +69,36 @@ test('без engines.dsh у бандла — код 1', () => {
   } finally { rmSync(к.каталог, { recursive: true, force: true }) }
 })
 
-test('короткий SHA от ls-remote — код 1', () => {
+test('npm 404 на @plexus-dsh/plexus — плагин пропущен, предупреждение в stderr, код 0', () => {
   const к = копия()
   try {
-    writeFileSync(join(к.сеть, 'ls-remote.txt'), '0123456\trefs/heads/main\n')
+    rmSync(join(к.сеть, 'npm-view-plexus.json'))
     const р = собрать(к)
-    assert.equal(р.status, 1)
-    assert.match(р.stderr, /SHA/)
+    assert.equal(р.status, 0, р.stderr)
+    assert.match(р.stderr, /@plexus-dsh\/plexus.*404/)
+    const индекс = JSON.parse(readFileSync(к.выход, 'utf8'))
+    assert.deepEqual(индекс.plugins.map((п) => п.name), ['@plexus-dsh/bundle'])
   } finally { rmSync(к.каталог, { recursive: true, force: true }) }
 })
 
-test('нет bundles/plexus-workers/package.json по SHA — код 1', () => {
+test('без engines.dsh у Плексуса — код 1', () => {
   const к = копия()
   try {
-    writeFileSync(join(к.сеть, 'ls-remote.txt'), `${'f'.repeat(40)}\trefs/heads/main\n`)
+    writeFileSync(join(к.сеть, 'npm-view-plexus.json'), JSON.stringify({
+      name: '@plexus-dsh/plexus', version: '2.11.3', time: { '2.11.3': '2026-11-25T18:41:24.892Z' },
+    }))
     const р = собрать(к)
     assert.equal(р.status, 1)
-    assert.match(р.stderr, /package\.json/)
+    assert.match(р.stderr, /engines\.dsh/)
   } finally { rmSync(к.каталог, { recursive: true, force: true }) }
 })
 
-test('--проверка: индекс с коротким SHA — код 1', () => {
+test('--проверка: источник с коротким SHA — код 1', () => {
   const к = копия()
   try {
     assert.equal(собрать(к).status, 0)
     const индекс = JSON.parse(readFileSync(к.выход, 'utf8'))
-    индекс.plugins[1].versions[0].source.commit = 'abc1234'
+    индекс.plugins[1].versions[0].source = { type: 'git', url: 'https://github.com/x/y', commit: 'abc1234' }
     const файл = join(к.каталог, 'плохой.json')
     writeFileSync(файл, JSON.stringify(индекс))
     const р = запуск('--проверка', файл)

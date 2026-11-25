@@ -3,7 +3,7 @@
 //   node tools/индекс_маркета.mjs --выход <файл>          собрать и записать market.json
 //   node tools/индекс_маркета.mjs --проверка <файл|URL>   только провалидировать
 // Сеть подменяема: --сеть-из <каталог> читает ответы из фикстур
-// (npm-view.json, ls-remote.txt, коммит.json, файлы/<sha>/<путь>);
+// (npm-view.json — бандл, npm-view-plexus.json — @plexus-dsh/plexus; файла нет = npm ответил 404);
 // --бандл <каталог> — где лежат package.json/иконка/locale бандла.
 // Коды выхода: 0 — готово, 1 — ошибка (причина в stderr).
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
@@ -14,9 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const КОРЕНЬ = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const БАНДЛ_ИМЯ = '@plexus-dsh/bundle'
-export const ПЛЕКСУС_URL = 'https://github.com/AidamirKaraziev/plexus'
-export const АДАПТЕР_ПУТЬ = 'bundles/plexus-workers'
-const ПОЛНЫЙ_SHA = /^[0-9a-f]{40}$/
+export const ПЛЕКСУС_ИМЯ = '@plexus-dsh/plexus'
 const ИНДЕКС_URL = 'https://raw.githubusercontent.com/AidamirKaraziev/plexus-dsh/main/market.json'
 
 export class Ошибка extends Error {}
@@ -32,33 +30,24 @@ export async function загрузитьВалидатор() {
 }
 
 // ---- сеть: реальная и из фикстур ----
+// npmView возвращает объект или null, если npm ответил 404 (пакета нет).
 export function сетьРеальная() {
-  const gh = ПЛЕКСУС_URL.replace('https://github.com/', '')
   return {
-    npmView: (имя) => JSON.parse(execFileSync('npm', ['view', имя, '--json'], { encoding: 'utf8' })),
-    lsRemote: (url, ref) => execFileSync('git', ['ls-remote', url, ref], { encoding: 'utf8' }),
-    async файл(sha, путь) {
-      const r = await fetch(`https://raw.githubusercontent.com/${gh}/${sha}/${путь}`)
-      return r.ok ? await r.text() : null
-    },
-    async времяКоммита(sha) {
-      const r = await fetch(`https://api.github.com/repos/${gh}/commits/${sha}`)
-      if (!r.ok) упасть(`не удалось получить коммит ${sha}: HTTP ${r.status}`)
-      return (await r.json()).commit.committer.date
+    npmView(имя) {
+      try {
+        return JSON.parse(execFileSync('npm', ['view', имя, '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }))
+      } catch (e) {
+        if (/E404|404 Not Found/.test(`${e.stderr ?? ''}${e.stdout ?? ''}`)) return null
+        throw e
+      }
     },
   }
 }
 
 export function сетьИзФикстур(каталог) {
-  const читать = (...п) => readFileSync(join(каталог, ...п), 'utf8')
+  const файл = (имя) => join(каталог, имя === БАНДЛ_ИМЯ ? 'npm-view.json' : 'npm-view-plexus.json')
   return {
-    npmView: () => JSON.parse(читать('npm-view.json')),
-    lsRemote: () => читать('ls-remote.txt'),
-    файл: async (sha, путь) => {
-      const п = join(каталог, 'файлы', sha, путь)
-      return existsSync(п) ? readFileSync(п, 'utf8') : null
-    },
-    времяКоммита: async () => JSON.parse(читать('коммит.json')).date,
+    npmView: (имя) => existsSync(файл(имя)) ? JSON.parse(readFileSync(файл(имя), 'utf8')) : null,
   }
 }
 
@@ -103,48 +92,39 @@ function нужныеEngines(pkg, кто) {
   return { dsh }
 }
 
+function версияNpm(имя, npm) {
+  const версия = npm.version ?? упасть(`npm view ${имя}: нет version`)
+  const время = npm.time?.[версия] ?? упасть(`npm view ${имя}: нет time[${версия}]`)
+  const ts = Math.floor(Date.parse(время) / 1000)
+  if (!Number.isFinite(ts)) упасть(`npm view ${имя}: время «${время}» не разобрать`)
+  return { version: версия, publishTimestamp: ts, source: { type: 'npm' }, engines: нужныеEngines(npm, имя) }
+}
+
 export async function собрать({ сеть, бандлКаталог }) {
   // 1. бандл: npm view + локальные файлы для отображения
-  const npm = сеть.npmView(БАНДЛ_ИМЯ)
-  const версия = npm.version ?? упасть('npm view: нет version')
-  const время = npm.time?.[версия] ?? упасть(`npm view: нет time[${версия}]`)
-  const ts = Math.floor(Date.parse(время) / 1000)
-  if (!Number.isFinite(ts)) упасть(`npm view: время «${время}» не разобрать`)
-  const локальный = JSON.parse(readFileSync(join(бандлКаталог, 'package.json'), 'utf8'))
+  const npm = сеть.npmView(БАНДЛ_ИМЯ) ?? упасть(`npm view ${БАНДЛ_ИМЯ}: пакета нет (404)`)
   const бандл = {
     name: БАНДЛ_ИМЯ,
-    ...await метаданные(локальный, async (п) => { const ф = join(бандлКаталог, п); return existsSync(ф) ? readFileSync(ф, 'utf8') : null }),
-    versions: [{
-      version: версия,
-      publishTimestamp: ts,
-      source: { type: 'npm' },
-      engines: нужныеEngines(npm, БАНДЛ_ИМЯ),
-    }],
+    ...await метаданные(
+      JSON.parse(readFileSync(join(бандлКаталог, 'package.json'), 'utf8')),
+      async (п) => { const ф = join(бандлКаталог, п); return existsSync(ф) ? readFileSync(ф, 'utf8') : null }),
+    versions: [версияNpm(БАНДЛ_ИМЯ, npm)],
   }
+  const плагины = [бандл]
 
-  // 2. адаптер: git на полный SHA ветки main
-  const строка = сеть.lsRemote(ПЛЕКСУС_URL, 'refs/heads/main').split('\n').find((с) => с.trim())
-  const sha = строка?.split(/\s+/)[0] ?? упасть('git ls-remote: пустой ответ')
-  if (!ПОЛНЫЙ_SHA.test(sha)) упасть(`git ls-remote: «${sha}» — не полный SHA`)
-  const pkgТекст = await сеть.файл(sha, `${АДАПТЕР_ПУТЬ}/package.json`)
-  if (pkgТекст === null) упасть(`по SHA ${sha} нет ${АДАПТЕР_ПУТЬ}/package.json`)
-  const адаптерPkg = JSON.parse(pkgТекст)
-  const адаптер = {
-    name: адаптерPkg.name ?? упасть('адаптер: нет name'),
-    ...await метаданные(адаптерPkg, (п) => сеть.файл(sha, `${АДАПТЕР_ПУТЬ}/${п}`)),
-    versions: [{
-      version: адаптерPkg.version ?? упасть('адаптер: нет version'),
-      publishTimestamp: Math.floor(Date.parse(await сеть.времяКоммита(sha)) / 1000),
-      source: { type: 'git', url: ПЛЕКСУС_URL, commit: sha, path: АДАПТЕР_ПУТЬ },
-      engines: нужныеEngines(адаптерPkg, адаптерPkg.name),
-    }],
+  // 2. Плексус: npm, последняя версия; 404 — плагин пропускается с предупреждением
+  const плексус = сеть.npmView(ПЛЕКСУС_ИМЯ)
+  if (плексус === null) {
+    console.error(`индекс_маркета: предупреждение: ${ПЛЕКСУС_ИМЯ} нет в npm (404), плагин пропущен`)
+  } else {
+    плагины.push({ name: ПЛЕКСУС_ИМЯ, versions: [версияNpm(ПЛЕКСУС_ИМЯ, плексус)] })
   }
 
   return {
     format: 1,
     title: { en: 'Plexus DSH', ru: 'Plexus DSH' },
     description: { en: 'Plugins for DeepSeek Harness by Plexus.', ru: 'Плагины Plexus для DeepSeek Harness.' },
-    plugins: [бандл, адаптер],
+    plugins: плагины,
   }
 }
 

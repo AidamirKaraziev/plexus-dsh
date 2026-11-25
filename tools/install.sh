@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Установка пакетов продукта в профили DSH одной командой.
+# Только для профилей bench-*: на другом имени (desktop, headless, web…) падает кодом 1 — в Desktop
+# пакеты ставятся через Plugins → Discover (маркет plexus-dsh), см. README витрины.
 #
-#   tools/install.sh                 собрать пакеты продукта, скопировать в ~/.<имя>/packages,
-#                                    вписать в cordis.patch.yml профилей desktop и headless
+#   tools/install.sh --profiles bench-warm   собрать пакеты продукта, скопировать в ~/.<имя>/packages,
+#                                    вписать в cordis.patch.yml названных профилей bench-*
 #   tools/install.sh --uninstall     снять блок пакетов из патчей (файлы в ~/.<имя>/packages остаются)
 #   tools/install.sh --no-build      не собирать (взять готовые lib/)
-#   tools/install.sh --profiles "web"  другие профили
 #   tools/install.sh --profiles bench-warm --from bench-base --packages "<имя>-meter <имя>-warm"
 #                                    профиль-копия: файлы профиля bench-base (package.json, pnpm-workspace.yaml,
 #                                    cordis.yml, cordis.patch.yml) копируются в bench-warm заново, затем блок
@@ -34,10 +35,17 @@ while [ $# -gt 0 ]; do
     --profiles) PROFILES="$2"; shift ;;
     --from) FROM="$2"; shift ;;
     --packages) ONLY="$2"; shift ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "install.sh: неизвестный флаг $1" >&2; exit 2 ;;
   esac
   shift
+done
+
+for p in $PROFILES; do
+  case "$p" in
+    bench-*) ;;
+    *) echo "install.sh: профиль $p не bench-*. Пакеты в обычный профиль ставятся через Plugins → Discover (маркет plexus-dsh, см. README), а не этим скриптом." >&2; exit 1 ;;
+  esac
 done
 
 if [ "$ACTION" = uninstall ]; then

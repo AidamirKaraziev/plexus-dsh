@@ -34,16 +34,13 @@
       ]
     },
     {
-      "name": "plexus-workers",
+      "name": "@plexus-dsh/plexus",
       "versions": [
         {
-          "version": "1.0.0",
-          "publishTimestamp": 1795606465,
+          "version": "2.11.3",
+          "publishTimestamp": 1795632084,
           "source": {
-            "type": "git",
-            "url": "https://github.com/AidamirKaraziev/plexus",
-            "commit": "054480694c81cc4c68b1c241b470cd74059cb08a",
-            "path": "bundles/plexus-workers"
+            "type": "npm"
           },
           "engines": {
             "dsh": "0.2.2-rc.5"

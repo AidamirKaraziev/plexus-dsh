@@ -29,12 +29,12 @@
 
 4. В списке появятся два плагина. Нажмите **Install** у каждого:
    - **Plexus DSH** (`@plexus-dsh/bundle`) — бандл из четырёх плагинов: `meter`, `warm`, `read-cap`, `scout`;
-   - **plexus-workers** — адаптер Плексуса (работники круга), ставится из git-источника Плексуса.
+   - **@plexus-dsh/plexus** — Плексус: 14 команд `/plexus-*` и работники `plexus-programmer`, `plexus-analyst`; пакет выпускает Плексус.
 
 ### Как проверить, что встало
 
 - Во вкладке **Installed** страницы Plugins есть оба пакета, а у бандла видны четыре плагина.
-- В списке скиллов есть `/plexus:start`.
+- В списке скиллов есть `/plexus-start` и `/plexus-help`.
 
 ### Запасной путь: из npm
 
@@ -44,7 +44,11 @@
 dsh plugin --profile <профиль> add @plexus-dsh/bundle@0.1.1
 ```
 
-Плагины добавляются в профиль в порядке `meter`, `warm`, `read-cap`, `scout`. Адаптер этой командой не ставится — только через Discover.
+Плагины добавляются в профиль в порядке `meter`, `warm`, `read-cap`, `scout`. Плексус ставится так же:
+
+```bash
+dsh plugin --profile <профиль> add @plexus-dsh/plexus
+```
 
 ## Совместимость
 
