@@ -21,7 +21,7 @@ const толькоКопии = process.argv.includes('--копии')
 // один манифест, патч и иконка, — он не собирается tsc и имени продукта не держит.
 const безКода = new Set(['bundle'])
 
-const имя = execFileSync('python3', ['-c', 'import sys; sys.path.insert(0, sys.argv[1]); from dsh_digest import NAME; print(NAME)',
+const имя = execFileSync(process.platform === 'win32' ? 'python' : 'python3', ['-c', 'import sys; sys.path.insert(0, sys.argv[1]); from dsh_digest import NAME; print(NAME)',
   join(корень, 'tools')], { encoding: 'utf8' }).trim()
 if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(имя)) throw new Error(`непонятное имя продукта: ${JSON.stringify(имя)}`)
 

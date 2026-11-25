@@ -202,8 +202,9 @@ def проверки_состава() -> list:
 
 def паковать(где: str) -> str:
     """Tarball бандла — так его и получит человек (или маркет) в руки."""
-    subprocess.run(['pnpm', '--filter', f'@{NAME}/{БАНДЛ}', 'exec', 'pnpm', 'pack', '--pack-destination', где],
-                   cwd=ПАКЕТЫ, check=True, capture_output=True, text=True)
+    pnpm = shutil.which('pnpm') or 'pnpm'  # на Windows это pnpm.cmd
+    subprocess.run([pnpm, '--filter', f'@{NAME}/{БАНДЛ}', 'exec', pnpm, 'pack', '--pack-destination', где],
+                   cwd=ПАКЕТЫ, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
     for имя in os.listdir(где):
         if имя.endswith('.tgz'):
             return os.path.join(где, имя)
@@ -219,7 +220,8 @@ def проверки_установки(дом: str, dsh: str) -> list:
     временное = tempfile.mkdtemp(prefix='проверка-бандла-')
     try:
         архив = паковать(временное)
-        внутри = tarfile.open(архив).getnames()
+        with tarfile.open(архив) as тар:
+            внутри = тар.getnames()
         # pnpm кладёт bundled-зависимости с путём `package/../node_modules/…`: на распаковке
         # это совпадает с `package/node_modules/…`, поэтому `..` в пути — норма, проверяем итог.
         плохие = [и for и in внутри if '..' in и.split('/')[:-1] and not и.startswith('package/../node_modules/')]
@@ -237,7 +239,7 @@ def проверки_установки(дом: str, dsh: str) -> list:
         профиль = os.path.join(дом, 'profiles', 'проверка')
         окружение = dict(os.environ, DSH_HOME=дом)
         установка = subprocess.run([dsh, 'plugin', '--profile', 'проверка', 'add', архив],
-                                   env=окружение, capture_output=True, text=True)
+                                   env=окружение, capture_output=True, text=True, encoding='utf-8', errors='replace')
         if установка.returncode != 0:
             хвост = (установка.stderr or установка.stdout).strip().splitlines()[-3:]
             return беды + ['установка не прошла: ' + ' / '.join(хвост)]
@@ -247,7 +249,7 @@ def проверки_установки(дом: str, dsh: str) -> list:
             беды.append('профиль: бандл не выбран в dsh.profile.bundles')
 
         конфиг = subprocess.run([dsh, '--profile', 'проверка', '--dump-config'],
-                                env=окружение, capture_output=True, text=True)
+                                env=окружение, capture_output=True, text=True, encoding='utf-8', errors='replace')
         if конфиг.returncode != 0:
             return беды + ['--dump-config не прошёл: ' + конфиг.stderr.strip().splitlines()[-1]]
         текст = конфиг.stdout
@@ -259,7 +261,7 @@ def проверки_установки(дом: str, dsh: str) -> list:
                 беды.append(f'профиль: строка {NAME}-{короткое} попала в бандл, а не должна')
 
         схема = subprocess.run([dsh, '--profile', 'проверка', '--dump-config-schema'],
-                               env=окружение, capture_output=True, text=True)
+                               env=окружение, capture_output=True, text=True, encoding='utf-8', errors='replace')
         if схема.returncode != 0:
             # Схему печатают только пакеты с Config; загрузка без ошибок уже проверена выше.
             беды.append('--dump-config-schema не прошёл: ' + схема.stderr.strip().splitlines()[-1])

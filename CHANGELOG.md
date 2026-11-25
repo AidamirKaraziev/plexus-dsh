@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1
+
+Выпуск в витрину и индекс маркета.
+
+- Установка через Discover в DSH: индекс `market.json` в корне репозитория, два плагина — бандл `@plexus-dsh/bundle` и адаптер `plexus-workers`.
+- Пакеты опубликованы в npm под scope `@plexus-dsh` (бандл, `meter`, `warm`, `read-cap` 0.1.1, `scout` 0.2.1); запасной путь — `dsh plugin add @plexus-dsh/bundle@0.1.1`.
+- README витрины описывает, как включить маркет и проверить установку.
+
 ## 0.1.0
 
 Первый выпуск. Бандл `@plexus-dsh/bundle` для DSH 0.2.2-rc.5, четыре пакета:

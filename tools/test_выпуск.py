@@ -105,6 +105,26 @@ def test_утечки(мир, текст):
     assert мир.git("tag").stdout.strip() == ""
 
 
+@pytest.mark.parametrize("файл,текст", [
+    ("публичное/README.md", "curl https://raw.githubusercontent.com/Aidamir%s/x/main/market.json\n" % ФАМИЛИЯ),
+    ("публичное/market.json", '{"url": "https://github.com/Aidamir%s/plexus"}\n' % ФАМИЛИЯ),
+    ("публичное/market.json", '{"u": "git+https://github.com/Aidamir%s/plexus.git"}\n' % ФАМИЛИЯ),
+])
+def test_ссылка_аккаунта_законна(мир, файл, текст):
+    (мир.м / файл).write_text(текст)
+    мир.коммит()
+    r = мир.выпуск("--в", str(мир.клон))
+    assert r.returncode == 0, r.stdout
+
+
+def test_фамилия_в_json_вне_ссылки(мир):
+    (мир.м / "публичное/market.json").write_text(
+        '{"url": "https://github.com/Aidamir%s/plexus", "author": "%s"}\n' % (ФАМИЛИЯ, ФАМИЛИЯ))
+    мир.коммит()
+    r = мир.выпуск("--в", str(мир.клон))
+    assert r.returncode == 1 and "market.json:1" in r.stdout
+
+
 def test_личный_список(мир):
     (мир.м / ".claude/сторож.txt").write_text("\nсекретное-слово\n")
     (мир.м / "bench/a.txt").write_text("тут Секретное-Слово\n")

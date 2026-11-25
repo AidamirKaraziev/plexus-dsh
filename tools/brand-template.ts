@@ -10,6 +10,9 @@
 
 // brand.json пишет tools/brandinfo.mjs на сборке; его копия лежит рядом с собранным lib/brand.js.
 // Путь относительный к этому файлу, а не к src: в пакет уезжает собранный lib/brand.js.
+// У пакетов без types: node (hello) модуль node:path для tsc неизвестен; в рантайме он есть всегда.
+// @ts-ignore
+import { join } from 'node:path'
 import brand from './brand.json' with { type: 'json' }
 
 /** Корень имени продукта: его пишет tools/brandinfo.mjs в brand.json на сборке. */
@@ -25,10 +28,10 @@ export const КАТАЛОГ = `.${КОРЕНЬ}`
 
 /** Журнал учёта по умолчанию: `<home>/.<корень>/usage.jsonl`. */
 export function журнал(home: string): string {
-  return `${home}/${КАТАЛОГ}/usage.jsonl`
+  return join(home, КАТАЛОГ, 'usage.jsonl')
 }
 
 /** Каталоги данных плагинов (один — каталог продукта). */
 export function каталоги(home: string): string[] {
-  return [`${home}/${КАТАЛОГ}`]
+  return [join(home, КАТАЛОГ)]
 }

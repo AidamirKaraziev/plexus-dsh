@@ -1,7 +1,15 @@
 {
   "name": "@plexus-dsh/scout",
-  "version": "0.2.0",
-  "private": true,
+  "version": "0.2.1",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AidamirKaraziev/plexus-dsh.git",
+    "directory": "packages/plexus-dsh-scout"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "description": "Инструмент scout: поиск и чтение в дочернем процессе на дешёвой модели; родителю — только итог, расход ребёнка — отдельной строкой журнала.",
@@ -39,6 +47,6 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "test": "tsc -b && node --test test/*.test.mjs"
+    "test": "tsc -b && node --test \"test/*.test.mjs\""
   }
 }

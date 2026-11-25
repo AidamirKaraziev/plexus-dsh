@@ -1,7 +1,15 @@
 {
   "name": "@plexus-dsh/bundle",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.1",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AidamirKaraziev/plexus-dsh.git",
+    "directory": "packages/plexus-dsh-bundle"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "description": "Пакеты Plexus DSH одним бандлом: метр, тёплый кэш, обрезка чтений и разведчик ставятся DSH одной строкой.",
   "exports": {
@@ -31,7 +39,8 @@
     }
   },
   "scripts": {
-    "build": "node ../../tools/bundle.mjs патч"
+    "build": "node ../../tools/bundle.mjs патч",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "bundledDependencies": [
     "@plexus-dsh/meter",

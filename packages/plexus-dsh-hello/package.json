@@ -35,6 +35,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "test": "tsc -b && node --test \"test/*.test.mjs\""
   }
 }

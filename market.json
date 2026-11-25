@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "title": {
+    "en": "Plexus DSH",
+    "ru": "Plexus DSH"
+  },
+  "description": {
+    "en": "Plugins for DeepSeek Harness by Plexus.",
+    "ru": "Плагины Plexus для DeepSeek Harness."
+  },
+  "plugins": [
+    {
+      "name": "@plexus-dsh/bundle",
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIxLjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCI+CiAgPGNpcmNsZSBjeD0iNiIgY3k9IjYiIHI9IjIuNCIvPgogIDxjaXJjbGUgY3g9IjYiIGN5PSIxOCIgcj0iMi40Ii8+CiAgPGNpcmNsZSBjeD0iMTgiIGN5PSIxMiIgcj0iMi40Ii8+CiAgPHBhdGggZD0iTTguMyA3LjIgMTUuNyAxMC45TTguMyAxNi44IDE1LjcgMTMuMSIvPgo8L3N2Zz4K",
+      "title": {
+        "en": "Plexus DSH",
+        "ru": "Plexus DSH"
+      },
+      "description": {
+        "en": "Window meter, warm cache, large-read cap and a cheap-model scout — the product's four plugins in one install.",
+        "ru": "Метр окна, тёплый кэш, обрезка больших чтений и разведчик на дешёвой модели — четыре плагина продукта одной установкой."
+      },
+      "versions": [
+        {
+          "version": "0.1.1",
+          "publishTimestamp": 1795599306,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": "0.2.2-rc.5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plexus-workers",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1795606465,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AidamirKaraziev/plexus",
+            "commit": "054480694c81cc4c68b1c241b470cd74059cb08a",
+            "path": "bundles/plexus-workers"
+          },
+          "engines": {
+            "dsh": "0.2.2-rc.5"
+          }
+        }
+      ]
+    }
+  ]
+}

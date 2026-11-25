@@ -4,7 +4,8 @@
   сторож.py <папка> [--личный <файл>] [--почта <адрес>]
 
 Ищет без учёта регистра: пути домашних папок, логин и фамилию (фамилия законна
-в LICENSE и внутри URL github.com/<аккаунт>/... в README.md), почту автора
+в LICENSE и внутри ссылок на GitHub-аккаунт в любом файле: github.com/<аккаунт>/...,
+raw.githubusercontent.com/<аккаунт>/..., git+https://github.com/<аккаунт>/...), почту автора
 (кроме noreply-адресов GitHub) и каждую непустую строку личного списка.
 Вывод: «что искали → файл:строка:текст». Код 1 при находке, 0 — чисто.
 Образцы собраны по частям, чтобы сторож не находил сам себя в белом списке.
@@ -18,7 +19,7 @@ HOME = "/ho" + "me/"
 LOGIN = "ajda" + "mir"
 SURNAME = "kara" + "ziev"
 NOREPLY = "@users.noreply." + "github.com"
-URL = re.compile(r"github\.com/\S*", re.I)
+URL = re.compile(r"(?:git\+)?https?://(?:www\.)?(?:github\.com|raw\.githubusercontent\.com)/[^\s\"'<>)\]]*|(?:github\.com|raw\.githubusercontent\.com)/[^\s\"'<>)\]]*", re.I)
 
 
 def разбор(argv):
@@ -86,7 +87,7 @@ def main(argv):
                     if t.lower() in low:
                         находки.append((метка, rel, n, строка))
                 if SURNAME in low and rel != "LICENSE":
-                    проверяемое = URL.sub("", low) if rel == "README.md" else low
+                    проверяемое = URL.sub("", low)
                     if SURNAME in проверяемое:
                         находки.append((SURNAME, rel, n, строка))
     for метка, rel, n, строка in находки:

@@ -4,9 +4,9 @@
   "type": "module",
   "description": "Пакеты Plexus DSH — плагины Cordis для DeepSeek Harness",
   "scripts": {
-    "build": "node ../tools/brandinfo.mjs && tsc -b plexus-dsh-*/tsconfig.json && node ../tools/brandinfo.mjs --копии && node ../tools/copy-prices.mjs",
-    "prepare": "node ../tools/brandinfo.mjs && tsc -b plexus-dsh-*/tsconfig.json && node ../tools/brandinfo.mjs --копии && node ../tools/copy-prices.mjs",
-    "clean": "tsc -b --clean plexus-dsh-*/tsconfig.json",
+    "build": "node ../tools/brandinfo.mjs && tsc -b plexus-dsh-budget/tsconfig.json plexus-dsh-hello/tsconfig.json plexus-dsh-meter/tsconfig.json plexus-dsh-read-cap/tsconfig.json plexus-dsh-scout/tsconfig.json plexus-dsh-warm/tsconfig.json && node ../tools/brandinfo.mjs --копии && node ../tools/copy-prices.mjs",
+    "prepare": "node ../tools/brandinfo.mjs && tsc -b plexus-dsh-budget/tsconfig.json plexus-dsh-hello/tsconfig.json plexus-dsh-meter/tsconfig.json plexus-dsh-read-cap/tsconfig.json plexus-dsh-scout/tsconfig.json plexus-dsh-warm/tsconfig.json && node ../tools/brandinfo.mjs --копии && node ../tools/copy-prices.mjs",
+    "clean": "tsc -b --clean plexus-dsh-budget/tsconfig.json plexus-dsh-hello/tsconfig.json plexus-dsh-meter/tsconfig.json plexus-dsh-read-cap/tsconfig.json plexus-dsh-scout/tsconfig.json plexus-dsh-warm/tsconfig.json",
     "test": "pnpm run -r test",
     "dsh:install": "../tools/install.sh",
     "dsh:uninstall": "../tools/install.sh --uninstall"
@@ -16,6 +16,7 @@
     "@deepseek-ai/cosmokit": "~1.9.0",
     "@deepseek-ai/dsh-agent": "0.2.2-rc.5",
     "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.5",
     "@deepseek-ai/dsh-session": "0.2.2-rc.5",
     "@deepseek-ai/dsh-subagent": "0.2.2-rc.5",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
