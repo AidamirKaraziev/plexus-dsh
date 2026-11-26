@@ -137,8 +137,8 @@ def проверки_состава() -> list:
     патч = м.get('dsh', {}).get('bundle', {}).get('patch')
     if патч != './' + ПАТЧ_ФАЙЛ:
         беды.append(f'бандл: dsh.bundle.patch должен быть ./{ПАТЧ_ФАЙЛ}, а не {патч!r}')
-    if м.get('private') is not True:
-        беды.append('бандл: пока не опубликован, private должен быть true')
+    if м.get('private') is True:
+        беды.append('бандл: опубликован в npm, private: true не даст выпустить новую версию')
     if 'main' in м:
         беды.append('бандл: у бандла нет своего кода — main не нужен')
     файл_патча = os.path.join(каталог, ПАТЧ_ФАЙЛ)
