@@ -44,7 +44,9 @@ Config: `maxTokens` (6000), `tools` (`read`, `grep`, `bash`), `headShare` (до�
 
 Инструмент `scout`: поиск и чтение уходят из основной сессии в дочернюю (spawn через `ctx.subagents`, `delivery: 'caller'`) на дешёвой модели; родителю возвращается только итог. Ребёнку разрешены только инструменты чтения (`read`, `read_image`, `grep`, `glob`, `working_directory`, `run_code`) — остальные отклоняет `ctx.tools.guard`. Расход ребёнка пишется строкой `kind: scout` в `usage.jsonl`. В системный промпт добавляется подсказка, когда звать `scout`.
 
-Config: `provider` (`opencode-go`), `model` (`glm-5.3-flash`), `subagentProvider` (`spawn`), `briefTokens` (3000, потолок брифа), `resultTokens` (2000, потолок итога), `childMaxTokens` (8000), `profile`, `log`, `prices`.
+Модели пробуются по порядку: основная (`provider`/`model`), затем `models`, в конце — модель родителя; модель без маршрута в DSH или не ответившая до первого шага пропускается, причина — в поле `fallback` строки журнала. С `modelSelection` агент выбирает модель из этого списка аргументом `model` (выбор — поле `chosen`). Разведчика зовут корневая сессия и субагенты; сам разведчик — нет.
+
+Config: `provider` (`opencode-go`), `model` (`glm-5.3-flash`), `models` (пусто; пары `{provider, model}`), `modelSelection` (`false`), `callerMaxDepth` (пусто — без предела, 0 — только корневая сессия), `subagentProvider` (`spawn`), `briefTokens` (3000, потолок брифа), `resultTokens` (2000, потолок итога), `childMaxTokens` (8000), `profile`, `log`, `prices`.
 
 ## plexus-dsh-budget
 

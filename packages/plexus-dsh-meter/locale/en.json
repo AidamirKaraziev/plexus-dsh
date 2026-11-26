@@ -10,6 +10,7 @@
     "budgetUsd": "Window budget, USD",
     "log": "Usage log (default ~/.plexus-dsh/usage.jsonl)",
     "sessionsDir": "DSH sessions root (default ~/.dsh/sessions)",
-    "prices": "Per-model prices overriding the built-in table"
+    "prices": "Per-model prices overriding the built-in table",
+    "updateCheck": "Check once a day for a new Plexus DSH version"
   }
 }

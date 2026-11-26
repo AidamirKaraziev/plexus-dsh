@@ -25,6 +25,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zstdDecompressSync } from 'node:zlib'
 import { имя, журнал } from './brand.js'
+import { проверитьОбновление, type ОпцииПроверки } from './update.js'
 
 export const name = имя('meter')
 
@@ -47,6 +48,7 @@ export const Config = z.object({
   budgetUsd: z.number().min(0).default(12).description("Бюджет окна, $"),
   log: z.string().description("Журнал учёта. По умолчанию ~/.<каталог данных>/usage.jsonl."),
   sessionsDir: z.string().description("Корень сессий DSH. По умолчанию ~/.dsh/sessions."),
+  updateCheck: z.boolean().default(true).description("Раз в сутки проверять, вышла ли новая версия Plexus DSH."),
   prices: z.dict(z.array(z.number())).description("Дополнительные или переопределённые цены по id модели."),
 })
 
@@ -147,7 +149,10 @@ function цены(из: Record<string, number[]> | undefined): Record<string, Pr
   return итог
 }
 
-export function apply(ctx: Context, config: Config = Config({})) {
+/** Подмена для тестов: откуда искать бандл, сеть и вызов по окончании фоновой проверки. */
+export interface ОпцииUpdate { корень?: string; fetch?: ОпцииПроверки['fetch']; готово?: () => void }
+
+export function apply(ctx: Context, config: Config = Config({}), опции: ОпцииUpdate = {}) {
   const log = ctx.logger(name)
   const windowMs = (config.windowHours ?? 5) * 3600_000
   const budget = config.budgetUsd ?? 12
@@ -246,6 +251,15 @@ export function apply(ctx: Context, config: Config = Config({})) {
     appendFileSync(usageLog, JSON.stringify(row) + '\n')
     log.info('окно Go: $%s = %s%% из $%s за %d ч (%d сессий); сессия $%s',
       row.window_usd, row.window_pct, budget, row.window_h, sessions, row.session_usd)
+  }
+
+  if (config.updateCheck ?? true) {
+    // в фоне: загрузку плагина и ход не задерживает; сама проверка не бросает
+    void проверитьОбновление({
+      корень: опции.корень ?? dirname(fileURLToPath(import.meta.url)),
+      файл: join(dirname(usageLog), 'update.json'),
+      log, fetch: опции.fetch,
+    }).then(опции.готово)
   }
 
   ctx.on('agent/turn-stopping', ({ agent, turn }) => {

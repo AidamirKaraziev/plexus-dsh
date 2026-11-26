@@ -4,6 +4,9 @@
 #   tools/опубликовать.sh                проверка: pack пяти пакетов, проверка tarball'ов, сторож; ничего не публикует
 #   tools/опубликовать.sh --публиковать  то же, затем pnpm publish в порядке зависимостей (npm login и 2FA — на человеке);
 #                                        версии, которые уже есть в npm (npm view), пропускаются — npm их всё равно не примет
+#   tools/опубликовать.sh --tgz <папка>  то же, но вместо публикации кладёт в <папка> tarball'ы только новых версий
+#                                        и порядок.txt: строки "@plexus-dsh/<п> <версия> <файл.tgz>" в порядке зависимостей
+#                                        (для CI: дальше npm publish <файл.tgz>); ничего не публикует, зеркало не трогает
 #
 # Проверка:
 #  - у пакета нет private, есть license MIT и publishConfig.access public;
@@ -20,12 +23,27 @@ GUARD="$ROOT/tools/сторож.py"
 ORDER=(meter warm read-cap scout bundle)
 
 DOPUBLISH=0
-for a in "$@"; do
-  case "$a" in
+TGZ=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --публиковать) DOPUBLISH=1 ;;
-    *) echo "опубликовать: неизвестный флаг $a" >&2; exit 2 ;;
+    --tgz)
+      if [ "$#" -lt 2 ]; then echo "опубликовать: --tgz требует папку" >&2; exit 2; fi
+      TGZ="$2"; shift ;;
+    *) echo "опубликовать: неизвестный флаг $1" >&2; exit 2 ;;
   esac
+  shift
 done
+if [ -n "$TGZ" ] && [ "$DOPUBLISH" -eq 1 ]; then
+  echo "опубликовать: --tgz и --публиковать вместе нельзя" >&2
+  exit 2
+fi
+if [ -n "$TGZ" ]; then
+  mkdir -p "$TGZ"
+  TGZ="$(cd "$TGZ" && pwd)"
+  # прошлые остатки не должны сойти за результат этого запуска
+  rm -f "$TGZ"/*.tgz "$TGZ/порядок.txt"
+fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -119,6 +137,17 @@ for p in "${ORDER[@]}"; do
     NEW+=("$p")
   fi
 done
+if [ -n "$TGZ" ]; then
+  : > "$TGZ/порядок.txt"
+  for p in "${NEW[@]+"${NEW[@]}"}"; do
+    v=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$PKG/plexus-dsh-$p/package.json")
+    f="plexus-dsh-$p-$v.tgz"
+    cp "$TMP/tgz/$f" "$TGZ/$f"
+    echo "@plexus-dsh/$p $v $f" >> "$TGZ/порядок.txt"
+  done
+  echo "== tarball'ы новых версий: ${#NEW[@]} — в $TGZ, порядок в порядок.txt"
+  exit 0
+fi
 if [ "${#NEW[@]}" -eq 0 ]; then
   echo "== все версии уже в npm, публиковать нечего"
   exit 0
@@ -144,3 +173,18 @@ for p in "${NEW[@]}"; do
   (cd "$PKG/plexus-dsh-$p" && pnpm publish --access public --no-git-checks)
 done
 echo "== опубликовано"
+
+# DSH спрашивает и зеркало npmmirror; само оно подтягивает новую версию через ~час, и всё это время
+# «Версии» в DSH пишут «Актуально». Просим синхронизацию сразу. Сбой не валит выпуск.
+# NPMMIRROR_SYNC="" выключает шаг (тесты).
+MIRROR="${NPMMIRROR_SYNC-https://registry-direct.npmmirror.com}"
+if [ -n "$MIRROR" ]; then
+  echo "== зеркало npmmirror"
+  for p in "${NEW[@]}"; do
+    if curl -fsS -X PUT "$MIRROR/-/package/@plexus-dsh/$p/syncs" >/dev/null; then
+      echo "  @plexus-dsh/$p: синхронизация запрошена"
+    else
+      echo "  @plexus-dsh/$p: зеркало не ответило — повторить: curl -X PUT $MIRROR/-/package/@plexus-dsh/$p/syncs"
+    fi
+  done
+fi

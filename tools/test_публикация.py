@@ -14,7 +14,7 @@ import pytest
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
 USERS = "/Use" + "rs/x"
-ВЕРСИИ = {"meter": "0.1.1", "warm": "0.1.1", "read-cap": "0.1.1", "scout": "0.2.2", "bundle": "0.1.2"}
+ВЕРСИИ = {"meter": "0.1.2", "warm": "0.1.1", "read-cap": "0.1.1", "scout": "0.2.3", "bundle": "0.1.4"}
 РЕПО = {"type": "git", "url": "git+https://github.com/AidamirKaraziev/plexus-dsh.git"}
 
 ПОДДЕЛЬНЫЙ_PNPM = r'''#!/usr/bin/env python3
@@ -92,7 +92,7 @@ class Мир:
         npm.write_text(ПОДДЕЛЬНЫЙ_NPM)
         npm.chmod(npm.stat().st_mode | stat.S_IEXEC)
         self.журнал = tmp_path / "журнал.txt"
-        self.env = dict(os.environ, PATH=f"{бин}:{os.environ['PATH']}", ФЕЙК_ЖУРНАЛ=str(self.журнал),
+        self.env = dict(os.environ, PATH=f"{бин}:{os.environ['PATH']}", ФЕЙК_ЖУРНАЛ=str(self.журнал), NPMMIRROR_SYNC="",
                         PACKAGES_DIR=str(self.пакеты))
 
     def запуск(self, *флаги):
@@ -141,10 +141,10 @@ def test_публикация_в_порядке_зависимостей(мир)
 
 
 def test_уже_опубликованные_версии_пропускаются(мир):
-    мир.env["ФЕЙК_В_NPM"] = "@plexus-dsh/meter@0.1.1 @plexus-dsh/warm@0.1.1 @plexus-dsh/read-cap@0.1.1"
+    мир.env["ФЕЙК_В_NPM"] = "@plexus-dsh/meter@0.1.2 @plexus-dsh/warm@0.1.1 @plexus-dsh/read-cap@0.1.1"
     r = мир.запуск("--публиковать")
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "@plexus-dsh/meter@0.1.1 уже в npm" in r.stdout
+    assert "@plexus-dsh/meter@0.1.2 уже в npm" in r.stdout
     assert мир.вызовы_publish() == ["plexus-dsh-scout", "plexus-dsh-bundle"]
 
 
@@ -172,3 +172,61 @@ def test_пакеты_готовы_к_npm():
         assert m["publishConfig"] == {"access": "public"}
         assert m["repository"]["url"] == РЕПО["url"]
         assert m["repository"]["directory"] == f"packages/plexus-dsh-{п}"
+
+
+def _порядок(папка):
+    return [l.split() for l in (папка / "порядок.txt").read_text().splitlines()]
+
+
+def test_tgz_новые_версии_кладутся_в_папку(мир, tmp_path):
+    папка = tmp_path / "выход"
+    r = мир.запуск("--tgz", str(папка))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _порядок(папка) == [
+        ["@plexus-dsh/" + п, в, f"plexus-dsh-{п}-{в}.tgz"] for п, в in ВЕРСИИ.items()]
+    assert sorted(x.name for x in папка.glob("*.tgz")) == sorted(
+        f"plexus-dsh-{п}-{в}.tgz" for п, в in ВЕРСИИ.items())
+    assert мир.вызовы_publish() == []
+
+
+def test_tgz_частично_опубликованные(мир, tmp_path):
+    мир.env["ФЕЙК_В_NPM"] = "@plexus-dsh/meter@0.1.2 @plexus-dsh/warm@0.1.1 @plexus-dsh/read-cap@0.1.1"
+    папка = tmp_path / "выход"
+    r = мир.запуск("--tgz", str(папка))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _порядок(папка) == [["@plexus-dsh/scout", "0.2.3", "plexus-dsh-scout-0.2.3.tgz"],
+                               ["@plexus-dsh/bundle", "0.1.4", "plexus-dsh-bundle-0.1.4.tgz"]]
+    assert sorted(x.name for x in папка.glob("*.tgz")) == ["plexus-dsh-bundle-0.1.4.tgz", "plexus-dsh-scout-0.2.3.tgz"]
+    assert мир.вызовы_publish() == []
+
+
+def test_tgz_все_опубликованы_порядок_пуст(мир, tmp_path):
+    мир.env["ФЕЙК_В_NPM"] = " ".join(f"@plexus-dsh/{п}@{в}" for п, в in ВЕРСИИ.items())
+    папка = tmp_path / "выход"
+    r = мир.запуск("--tgz", str(папка))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (папка / "порядок.txt").read_text() == ""
+    assert list(папка.glob("*.tgz")) == []
+
+
+def test_tgz_сторож_красный_папка_пуста(мир, tmp_path):
+    (мир.пакеты / "plexus-dsh-warm" / "README.md").write_text("лежит в %s/проект\n" % USERS)
+    папка = tmp_path / "выход"
+    r = мир.запуск("--tgz", str(папка))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert list(папка.iterdir()) == []
+
+
+def test_tgz_красная_проверка_tarballов_папка_пуста(мир, tmp_path):
+    m = json.loads((мир.пакеты / "версии.json").read_text())
+    (мир.пакеты / "версии.json").write_text(json.dumps({k: "workspace:*" for k in m}))
+    папка = tmp_path / "выход"
+    r = мир.запуск("--tgz", str(папка))
+    assert r.returncode == 1
+    assert list(папка.iterdir()) == []
+
+
+def test_tgz_вместе_с_публиковать_код_2(мир, tmp_path):
+    r = мир.запуск("--tgz", str(tmp_path / "выход"), "--публиковать")
+    assert r.returncode == 2
+    assert мир.вызовы_publish() == []

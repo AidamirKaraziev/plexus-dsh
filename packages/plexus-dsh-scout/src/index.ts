@@ -43,7 +43,7 @@ export const name = имя('scout')
 /** `tools` — `scout` и guard; `subagents` — spawn-ребёнок; `systemPrompt` — подсказка родителю. */
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
-const VERSION = '0.2.2'
+const VERSION = '0.2.3'
 
 /**
  * Метка профиля для строки журнала. Явное `config.profile` главнее (tools/bench.py пишет туда свои
@@ -83,6 +83,12 @@ export type Config = ReturnType<typeof Config>
 export const Config = z.object({
   provider: z.string().default('opencode-go').description("Провайдер ребёнка. Пусто — модель родителя. Нет такого маршрута в DSH — тоже модель родителя."),
   model: z.string().default('glm-5.3-flash').description("Модель ребёнка. Пусто — модель родителя."),
+  models: z.array(z.object({
+    provider: z.string().min(1).required(),
+    model: z.string().min(1).required(),
+  })).default([]).description("Ещё модели разведчика по порядку: пробуются после основной и до модели родителя. С выбором модели агентом — из них и основной он выбирает."),
+  modelSelection: z.boolean().default(false).description("Разрешить агенту выбирать модель разведчика из основной и списка выше. Выключено — всегда первая доступная."),
+  callerMaxDepth: z.natural().description("Наибольшая глубина агента, которому доступен разведчик: 0 — только корневая сессия. Пусто — любой агент, кроме самого разведчика."),
   subagentProvider: z.string().description("Провайдер ctx.subagents"),
   briefTokens: z.number().step(1).min(1).default(3000).description("Потолок брифа от родителя, токенов"),
   resultTokens: z.number().step(1).min(1).default(2000).description("Потолок итога для родителя, токенов"),
@@ -95,6 +101,8 @@ export const Config = z.object({
 export const DEFAULTS = {
   provider: 'opencode-go',
   model: 'glm-5.3-flash',
+  models: [] as Route[],
+  modelSelection: false,
   subagentProvider: 'spawn',
   briefTokens: 3000,
   resultTokens: 2000,
@@ -196,6 +204,59 @@ export function выборМодели(
   return { provider: cfg.provider, model: cfg.model }
 }
 
+/** Маршрут модели ребёнка. */
+export interface Route {
+  provider: string
+  model: string
+}
+
+/** `provider/model` — так модель видит агент и так она пишется в журнал. */
+export function ключ(r: Route): string {
+  return `${r.provider}/${r.model}`
+}
+
+/** Разрешённые модели разведчика по порядку: основная (`provider`/`model`), затем `models`, без пустых и повторов. */
+export function разрешённые(cfg: { provider?: string; model?: string; models?: ReadonlyArray<Partial<Route>> }): Route[] {
+  const итог: Route[] = []
+  const было = new Set<string>()
+  for (const r of [{ provider: cfg.provider, model: cfg.model }, ...(cfg.models ?? [])]) {
+    if (!r.provider || !r.model) continue
+    const маршрут = { provider: r.provider, model: r.model }
+    if (было.has(ключ(маршрут))) continue
+    было.add(ключ(маршрут))
+    итог.push(маршрут)
+  }
+  return итог
+}
+
+/**
+ * Очередь попыток: выбранная агентом — первой, остальные разрешённые — по порядку.
+ * Модели без маршрута в DSH и уже не ответившие в этом процессе пропускаются, их причины —
+ * в `причины` (они попадут в поле `fallback` строки журнала). Пустая очередь — модель родителя.
+ */
+export function очередьМоделей(
+  разрешено: readonly Route[],
+  есть: Set<string> | undefined,
+  сломаны: ReadonlyMap<string, string>,
+  выбрано?: string,
+): { очередь: Route[]; причины: string[] } {
+  const причины: string[] = []
+  const известна = выбрано !== undefined && разрешено.some(r => ключ(r) === выбрано)
+  if (выбрано !== undefined && !известна) причины.push(`модель ${выбрано} не из списка`)
+  const порядок = известна
+    ? [...разрешено.filter(r => ключ(r) === выбрано), ...разрешено.filter(r => ключ(r) !== выбрано)]
+    : разрешено
+  const очередь: Route[] = []
+  for (const r of порядок) {
+    const сломана = сломаны.get(ключ(r))
+    if (сломана) { причины.push(сломана); continue }
+    const в = выборМодели(r, есть)
+    if ('причина' in в) { причины.push(в.причина); continue }
+    очередь.push(в)
+  }
+  return { очередь, причины }
+}
+
 /** Глубина делегирования агента (как delegationDepthOf в dsh-subagent, без импорта значения). */
 function depthOf(agent: Agent): number {
   const runtime = (agent.options as { subagentDepth?: number }).subagentDepth ?? 0
@@ -220,6 +281,8 @@ interface PromptService {
 export interface ScoutArgs {
   brief: string
   description?: string
+  /** `provider/model` из разрешённых — только при `modelSelection`. */
+  model?: string
 }
 
 /** Цены из config — в кортежи: схема отдаёт `number[]`, учёт ждёт четвёрку. */
@@ -279,13 +342,27 @@ export function apply(ctx: Context, config: Config = Config({})) {
     }
   }
 
-  /** Причина, по которой своя модель ребёнка больше не пробуется в этом процессе. */
-  let маршрутСломан: string | undefined
+  /** Модели разведчика из настроек, по порядку. */
+  const разрешено = разрешённые(cfg)
+  /** Модели, не ответившие в этом процессе: `provider/model` → причина. Больше не пробуются. */
+  const сломаны = new Map<string, string>()
+  /** Агент выбирает модель: есть настройка и есть из чего выбирать. */
+  const выборАгентом = cfg.modelSelection === true && разрешено.length > 1
+
+  /** Доступен ли разведчик агенту: сам разведчик — нет; глубже `callerMaxDepth` — нет. */
+  function отказ(agent: Agent): string | undefined {
+    if (children.has(agent.session.id)) return 'scout: разведчик не запускает разведчиков — работай сам'
+    const глубина = depthOf(agent)
+    if (cfg.callerMaxDepth !== undefined && глубина > cfg.callerMaxDepth) {
+      return `scout: разведчик доступен агентам до глубины ${cfg.callerMaxDepth}, у тебя ${глубина} — работай сам`
+    }
+    return undefined
+  }
 
   /** Один запуск ребёнка и строка журнала. `модель` undefined — модель родителя. */
   async function запуск(
     parent: Agent, brief: string, raw: string, args: ScoutArgs, exec: ToolRunContext,
-    модель: { provider: string; model: string } | undefined, запасной: string | undefined,
+    модель: Route | undefined, запасной: string | undefined, выбрано: string | undefined,
   ) {
     const started = Date.now()
     const childId = randomUUID()
@@ -328,6 +405,7 @@ export function apply(ctx: Context, config: Config = Config({})) {
       child: childId,
       provider: модель?.provider ?? родитель?.provider, model: модель?.model ?? родитель?.model,
       ...(запасной ? { fallback: запасной } : {}),
+      ...(выбрано ? { chosen: выбрано } : {}),
       stop,
       ms: Date.now() - started,
       steps: usage.steps,
@@ -349,22 +427,27 @@ export function apply(ctx: Context, config: Config = Config({})) {
   async function run(args: ScoutArgs, exec: ToolRunContext): Promise<string> {
     const parent = exec.agent
     if (!parent) throw new Error('scout: нет вызывающего агента')
-    if (children.has(parent.session.id) || depthOf(parent) > 0) {
-      throw new Error('scout: разведчик не запускает разведчиков — работай сам')
-    }
+    const нельзя = отказ(parent)
+    if (нельзя) throw new Error(нельзя)
     const raw = String(args.brief ?? '').trim()
     if (!raw) throw new Error('scout: пустой бриф')
     const brief = clip(raw, cfg.briefTokens, 'бриф')
-    const выбор = маршрутСломан ? { причина: маршрутСломан } : выборМодели(cfg, маршруты(ctx))
-    let попытка = await запуск(parent, brief, raw, args, exec, 'provider' in выбор ? выбор : undefined,
-      'причина' in выбор && cfg.provider ? выбор.причина : undefined)
-    // Своя модель упала, не сделав ни шага (нет ключа, нет маршрута, регион, нет модели) —
-    // повтор на модели родителя: разведчик дешевле, но не обязателен.
-    if ('provider' in выбор && попытка.stop !== 'completed' && попытка.steps === 0 && !exec.signal?.aborted) {
-      маршрутСломан = `${выбор.provider}/${выбор.model} не ответила`
-      log.warn('scout: %s — дальше модель родителя', маршрутСломан)
-      попытка = await запуск(parent, brief, raw, args, exec, undefined, маршрутСломан)
+    const выбрано = выборАгентом && typeof args.model === 'string' && args.model ? args.model : undefined
+    const { очередь, причины } = очередьМоделей(разрешено, маршруты(ctx), сломаны, выбрано)
+    const запасной = () => (причины.length ? причины.join('; ') : undefined)
+    let попытка: Awaited<ReturnType<typeof запуск>> | undefined
+    for (const модель of очередь) {
+      попытка = await запуск(parent, brief, raw, args, exec, модель, запасной(), выбрано)
+      if (попытка.stop === 'completed' || попытка.steps > 0 || exec.signal?.aborted) break
+      // Модель упала, не сделав ни шага (нет ключа, нет маршрута, регион, нет модели) —
+      // следующая из списка, в конце — модель родителя: разведчик дешевле, но не обязателен.
+      const почему = `${ключ(модель)} не ответила`
+      сломаны.set(ключ(модель), почему)
+      причины.push(почему)
+      log.warn('scout: %s — дальше следующая модель', почему)
+      попытка = undefined
     }
+    попытка ??= await запуск(parent, brief, raw, args, exec, undefined, запасной(), выбрано)
     const { result, failure, text } = попытка
 
     if (failure !== undefined) throw failure
@@ -392,6 +475,14 @@ export function apply(ctx: Context, config: Config = Config({})) {
             `${cfg.briefTokens} ток. — обрежется.`,
         },
         description: { type: 'string', description: 'Короткая подпись (3–5 слов) для показа.' },
+        ...(выборАгентом ? {
+          model: {
+            type: 'string',
+            enum: разрешено.map(ключ),
+            description: `Модель разведчика. Не указывай — возьмётся ${ключ(разрешено[0]!)}: её хватает, ` +
+              'чтобы найти, прочитать и процитировать. Другую бери, только если надо сопоставить много мест или понять логику.',
+          },
+        } : {}),
       },
       required: ['brief'],
     },
@@ -406,15 +497,17 @@ export function apply(ctx: Context, config: Config = Config({})) {
   }
   ctx.tools.register(tool)
 
-  // Подсказка основной модели — только корневому агенту (у детей глубина > 0).
+  // Подсказка — тем агентам, кому разведчик доступен: не ему самому и не глубже callerMaxDepth.
   const prompt = (ctx as unknown as { systemPrompt: PromptService }).systemPrompt
   prompt.section({
     name: 'tool:scout',
     order: prompt.getSectionOrder('TOOL_GREP') + 1,
-    text: (context) => (context.agent && depthOf(context.agent) === 0 && !children.has(context.agent.session.id) ? HINT : ''),
+    text: (context) => (context.agent && !отказ(context.agent) ? HINT : ''),
   })
 
-  log.info('scout: %s/%s (нет маршрута — модель родителя), бриф ≤ %d, итог ≤ %d ток.', cfg.provider, cfg.model, cfg.briefTokens, cfg.resultTokens)
+  log.info('scout: %s (дальше — модель родителя)%s, бриф ≤ %d, итог ≤ %d ток.',
+    разрешено.map(ключ).join(' → ') || 'модель родителя', выборАгентом ? ', агент выбирает' : '',
+    cfg.briefTokens, cfg.resultTokens)
 }
 
 /** Модель родителя для строки журнала — что DSH выберет для его следующего шага. */

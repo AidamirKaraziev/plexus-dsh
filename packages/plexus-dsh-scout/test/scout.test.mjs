@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply, clip, tokens, denyForScout, childPrompt, профиль, выборМодели } from '../lib/index.js'
+import { apply, clip, tokens, denyForScout, childPrompt, профиль, выборМодели, разрешённые, очередьМоделей, ключ, ценаМодели } from '../lib/index.js'
 
 const big = (n) => Array.from({ length: n }, (_, i) => `строка ${i} ` + 'x'.repeat(60)).join('\n')
 
@@ -42,6 +42,7 @@ function fakeCtx(output, { providers, падает } = {}) {
       async startActivation(spec) {
         h.starts.push(spec)
         const session = { id: spec.childId }
+        if (h.приСтарте) await h.приСтарте(spec)
         // своя модель недоступна: ребёнок падает до первого шага
         if (падает && spec.agentOptions.provider === падает) {
           return { childId: spec.childId, name: 'agent-x', result: Promise.resolve({ output: [], stopReason: 'error' }), dispose: async () => {} }
@@ -105,12 +106,94 @@ test('scout: бриф ≤ 3K, итог ≤ 2K, ребёнок только чи�
   assert.match(readFileSync(log, 'utf8'), /"kind":"scout"/)
 })
 
-test('scout: ребёнок (глубина > 0) разведчика не зовёт и подсказки не видит', async () => {
+test('scout: субагент (глубина 1) зовёт разведчика и видит подсказку', async () => {
   const { ctx, h } = fakeCtx('ok')
   apply(ctx, { log: join(mkdtempSync(join(tmpdir(), 'scout-')), 'u.jsonl') })
-  const child = { session: { id: 'c', header: { delegationDepth: 1 } }, options: {} }
-  assert.equal(h.sections[0].text({ agent: child }), '')
-  await assert.rejects(h.tools[0].execute({ brief: 'x' }, { agent: child, signal: new AbortController().signal }), /не запускает/)
+  const sub = { session: { id: 'c', header: { delegationDepth: 1 } }, options: {} }
+  assert.match(h.sections[0].text({ agent: sub }), /Ищи и читай через `scout`/)
+  assert.equal(await h.tools[0].execute({ brief: 'x' }, { agent: sub, signal: new AbortController().signal }), 'ok')
+})
+
+test('scout: callerMaxDepth 0 — субагенту отказ и без подсказки', async () => {
+  const { ctx, h } = fakeCtx('ok')
+  apply(ctx, { log: join(mkdtempSync(join(tmpdir(), 'scout-')), 'u.jsonl'), callerMaxDepth: 0 })
+  const sub = { session: { id: 'c', header: { delegationDepth: 1 } }, options: {} }
+  assert.equal(h.sections[0].text({ agent: sub }), '')
+  await assert.rejects(h.tools[0].execute({ brief: 'x' }, { agent: sub, signal: new AbortController().signal }), /до глубины 0, у тебя 1/)
+  assert.equal(h.starts.length, 0)
+})
+
+test('scout: сам разведчик разведчика не зовёт и подсказки не видит', async () => {
+  const { ctx, h } = fakeCtx('ok')
+  let изнутри
+  h.приСтарте = async (spec) => {
+    const сам = { session: { id: spec.childId, header: { delegationDepth: 1 } }, options: {} }
+    изнутри = {
+      подсказка: h.sections[0].text({ agent: сам }),
+      вызов: await h.tools[0].execute({ brief: 'y' }, { agent: сам, signal: new AbortController().signal }).catch(e => e.message),
+    }
+  }
+  apply(ctx, { log: join(mkdtempSync(join(tmpdir(), 'scout-')), 'u.jsonl') })
+  await h.tools[0].execute({ brief: 'x' }, { agent: parent, signal: new AbortController().signal })
+  assert.equal(изнутри.подсказка, '')
+  assert.match(изнутри.вызов, /не запускает разведчиков/)
+  assert.equal(h.starts.length, 1)
+})
+
+test('список моделей: основная, затем models без пустых и повторов', () => {
+  const r = разрешённые({ provider: 'opencode-go', model: 'glm-5.3-flash', models: [
+    { provider: 'openai-codex', model: 'gpt-6-luna' }, { provider: 'opencode-go', model: 'glm-5.3-flash' }, { provider: '', model: 'x' },
+  ] })
+  assert.deepEqual(r.map(ключ), ['opencode-go/glm-5.3-flash', 'openai-codex/gpt-6-luna'])
+  assert.deepEqual(разрешённые({ provider: '', model: '', models: [] }), [])
+})
+
+test('очередь: выбранная первой, без маршрута и сломанные — в причины', () => {
+  const r = [{ provider: 'opencode-go', model: 'glm-5.3-flash' }, { provider: 'openai-codex', model: 'gpt-6-luna' }, { provider: 'openai-codex', model: 'gpt-6-sol' }]
+  const есть = new Set(['openai-codex'])
+  const q1 = очередьМоделей(r, есть, new Map())
+  assert.deepEqual(q1.очередь.map(ключ), ['openai-codex/gpt-6-luna', 'openai-codex/gpt-6-sol'])
+  assert.deepEqual(q1.причины, ['нет маршрута opencode-go'])
+  const q2 = очередьМоделей(r, undefined, new Map([['openai-codex/gpt-6-luna', 'openai-codex/gpt-6-luna не ответила']]), 'openai-codex/gpt-6-sol')
+  assert.deepEqual(q2.очередь.map(ключ), ['openai-codex/gpt-6-sol', 'opencode-go/glm-5.3-flash'])
+  assert.deepEqual(q2.причины, ['openai-codex/gpt-6-luna не ответила'])
+  assert.deepEqual(очередьМоделей(r, undefined, new Map(), 'x/y').причины, ['модель x/y не из списка'])
+})
+
+test('только Codex: Go нет — разведчик на модели из списка, не на модели родителя', async () => {
+  const log = join(mkdtempSync(join(tmpdir(), 'scout-')), 'u.jsonl')
+  const { ctx, h } = fakeCtx('нашёл', { providers: ['openai-codex'] })
+  apply(ctx, { log, profile: 'test', models: [{ provider: 'openai-codex', model: 'gpt-6-luna' }] })
+  assert.equal(await h.tools[0].execute({ brief: 'найди X' }, { agent: родитель, signal: new AbortController().signal }), 'нашёл')
+  assert.deepEqual([h.starts[0].agentOptions.provider, h.starts[0].agentOptions.model], ['openai-codex', 'gpt-6-luna'])
+  const r = JSON.parse(readFileSync(log, 'utf8').trim())
+  assert.deepEqual([r.provider, r.model, r.fallback], ['openai-codex', 'gpt-6-luna', 'нет маршрута opencode-go'])
+})
+
+test('выбор агентом: выключен — поля model нет и аргумент не действует', async () => {
+  const { ctx, h } = fakeCtx('ok')
+  apply(ctx, { log: join(mkdtempSync(join(tmpdir(), 'scout-')), 'u.jsonl'), models: [{ provider: 'openai-codex', model: 'gpt-6-sol' }] })
+  assert.equal(h.tools[0].parameters.properties.model, undefined)
+  await h.tools[0].execute({ brief: 'x', model: 'openai-codex/gpt-6-sol' }, { agent: parent, signal: new AbortController().signal })
+  assert.equal(h.starts[0].agentOptions.provider, 'opencode-go')
+})
+
+test('выбор агентом: включён — enum из разрешённых, выбранная идёт первой, chosen в журнале', async () => {
+  const log = join(mkdtempSync(join(tmpdir(), 'scout-')), 'u.jsonl')
+  const { ctx, h } = fakeCtx('ok')
+  apply(ctx, { log, modelSelection: true, models: [{ provider: 'openai-codex', model: 'gpt-6-sol' }] })
+  const поле = h.tools[0].parameters.properties.model
+  assert.deepEqual(поле.enum, ['opencode-go/glm-5.3-flash', 'openai-codex/gpt-6-sol'])
+  assert.match(поле.description, /Не указывай — возьмётся opencode-go\/glm-5.3-flash/)
+  await h.tools[0].execute({ brief: 'x', model: 'openai-codex/gpt-6-sol' }, { agent: parent, signal: new AbortController().signal })
+  assert.deepEqual([h.starts[0].agentOptions.provider, h.starts[0].agentOptions.model], ['openai-codex', 'gpt-6-sol'])
+  const r = JSON.parse(readFileSync(log, 'utf8').trim())
+  assert.equal(r.chosen, 'openai-codex/gpt-6-sol')
+})
+
+test('цены: модели Codex в справочнике', () => {
+  assert.deepEqual(ценаМодели('gpt-6-luna'), [0.1, 0.01, 0.125, 0.5])
+  assert.ok(ценаМодели('gpt-6-sol'))
 })
 
 test('выбор модели: нет маршрута или модель пустая — модель родителя', () => {

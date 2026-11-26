@@ -7,6 +7,9 @@
   "config": {
     "provider": "Child provider",
     "model": "Child model",
+    "models": "More scout models in order, tried before the parent model",
+    "modelSelection": "Let the agent pick the scout model",
+    "callerMaxDepth": "Deepest agent that may call the scout; empty means any",
     "subagentProvider": "Provider for ctx.subagents",
     "briefTokens": "Brief cap from the parent, tokens",
     "resultTokens": "Result cap for the parent, tokens",
