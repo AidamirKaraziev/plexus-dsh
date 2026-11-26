@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 (бандл) · витрина 0.1.6
+
+- `@plexus-dsh/scout` 0.2.2: разведчик работает без подписки OpenCode Go. Если в DSH нет маршрута `opencode-go` или дешёвая модель не ответила до первого шага, ребёнок запускается на модели основной сессии. Раньше вызов падал с `[scout: error]` и «no adapter registered for provider "opencode-go"». Настраивать ничего не нужно; в строке `usage.jsonl` видно поле `fallback` с причиной.
+- `@plexus-dsh/bundle` 0.1.2 тянет scout 0.2.2; meter, warm и read-cap остаются 0.1.1.
+
 ## 0.1.2
 
 Выпуск витрины; версии пакетов @plexus-dsh в npm не менялись (бандл 0.1.1).

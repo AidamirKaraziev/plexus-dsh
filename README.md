@@ -43,7 +43,7 @@
 Если маркет не включается, бандл ставится из командной строки (нужен npm-доступ к `@plexus-dsh`):
 
 ```bash
-dsh plugin --profile <профиль> add @plexus-dsh/bundle@0.1.1
+dsh plugin --profile <профиль> add @plexus-dsh/bundle@0.1.2
 ```
 
 Плагины добавляются в профиль в порядке `meter`, `warm`, `read-cap`, `scout`. Плексус ставится так же:

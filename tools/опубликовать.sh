@@ -2,7 +2,8 @@
 # Выпуск пакетов @plexus-dsh в npm.
 #
 #   tools/опубликовать.sh                проверка: pack пяти пакетов, проверка tarball'ов, сторож; ничего не публикует
-#   tools/опубликовать.sh --публиковать  то же, затем pnpm publish в порядке зависимостей (npm login и 2FA — на человеке)
+#   tools/опубликовать.sh --публиковать  то же, затем pnpm publish в порядке зависимостей (npm login и 2FA — на человеке);
+#                                        версии, которые уже есть в npm (npm view), пропускаются — npm их всё равно не примет
 #
 # Проверка:
 #  - у пакета нет private, есть license MIT и publishConfig.access public;
@@ -108,8 +109,23 @@ for p in "${ORDER[@]}"; do
   python3 "$GUARD" "$TMP/распаковано/$p/package" || { echo "опубликовать: сторож нашёл личное в @plexus-dsh/$p" >&2; exit 1; }
 done
 
-CMD=""
+# Что публиковать: версии, которых ещё нет в npm. Опубликованную версию npm не примет повторно.
+NEW=()
 for p in "${ORDER[@]}"; do
+  v=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$PKG/plexus-dsh-$p/package.json")
+  if [ -n "$(npm view "@plexus-dsh/$p@$v" version 2>/dev/null)" ]; then
+    echo "  @plexus-dsh/$p@$v уже в npm — пропуск"
+  else
+    NEW+=("$p")
+  fi
+done
+if [ "${#NEW[@]}" -eq 0 ]; then
+  echo "== все версии уже в npm, публиковать нечего"
+  exit 0
+fi
+
+CMD=""
+for p in "${NEW[@]}"; do
   CMD+="(cd packages/plexus-dsh-$p && pnpm publish --access public) && "
 done
 CMD="${CMD% && }"
@@ -124,7 +140,7 @@ if [ "$DOPUBLISH" -eq 0 ]; then
 fi
 
 echo "== публикация"
-for p in "${ORDER[@]}"; do
+for p in "${NEW[@]}"; do
   (cd "$PKG/plexus-dsh-$p" && pnpm publish --access public --no-git-checks)
 done
 echo "== опубликовано"

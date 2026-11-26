@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply, clip, tokens, denyForScout, childPrompt, профиль } from '../lib/index.js'
+import { apply, clip, tokens, denyForScout, childPrompt, профиль, выборМодели } from '../lib/index.js'
 
 const big = (n) => Array.from({ length: n }, (_, i) => `строка ${i} ` + 'x'.repeat(60)).join('\n')
 
@@ -30,9 +30,10 @@ test('профиль: явная метка главнее, иначе имя п
   assert.equal(профиль({ get: () => undefined }, undefined), undefined)
 })
 
-function fakeCtx(output) {
+function fakeCtx(output, { providers, падает } = {}) {
   const h = { tools: [], guards: [], on: {}, starts: [], sections: [] }
   const ctx = {
+    get: (n) => (n === 'llm' && providers ? { listProviders: () => providers.map(id => ({ id })) } : undefined),
     logger: () => ({ info() {}, warn() {}, debug() {} }),
     on: (ev, fn) => { h.on[ev] = fn },
     tools: { register: (t) => { h.tools.push(t); return () => {} }, guard: (g) => { h.guards.push(g); return () => {} } },
@@ -41,6 +42,10 @@ function fakeCtx(output) {
       async startActivation(spec) {
         h.starts.push(spec)
         const session = { id: spec.childId }
+        // своя модель недоступна: ребёнок падает до первого шага
+        if (падает && spec.agentOptions.provider === падает) {
+          return { childId: spec.childId, name: 'agent-x', result: Promise.resolve({ output: [], stopReason: 'error' }), dispose: async () => {} }
+        }
         // ребёнок пытается писать — guard должен отказать
         h.denied = h.guards[0]({ name: 'write', agent: { session } })
         h.allowed = h.guards[0]({ name: 'read', agent: { session } })
@@ -106,4 +111,42 @@ test('scout: ребёнок (глубина > 0) разведчика не зо�
   const child = { session: { id: 'c', header: { delegationDepth: 1 } }, options: {} }
   assert.equal(h.sections[0].text({ agent: child }), '')
   await assert.rejects(h.tools[0].execute({ brief: 'x' }, { agent: child, signal: new AbortController().signal }), /не запускает/)
+})
+
+test('выбор модели: нет маршрута или модель пустая — модель родителя', () => {
+  const cfg = { provider: 'opencode-go', model: 'glm-5.3-flash' }
+  assert.deepEqual(выборМодели(cfg, undefined), cfg)
+  assert.deepEqual(выборМодели(cfg, new Set(['opencode-go', 'deepseek'])), cfg)
+  assert.match(выборМодели(cfg, new Set(['deepseek'])).причина, /нет маршрута opencode-go/)
+  assert.ok('причина' in выборМодели({ provider: '', model: '' }, undefined))
+})
+
+const родитель = { session: { id: 'session-parent', header: {} }, options: { provider: 'deepseek', model: 'deepseek-v4' } }
+
+test('scout без подписки Go: маршрута нет — ребёнок на модели родителя, без ошибки', async () => {
+  const log = join(mkdtempSync(join(tmpdir(), 'scout-')), 'u.jsonl')
+  const { ctx, h } = fakeCtx('нашёл', { providers: ['deepseek'] })
+  apply(ctx, { log, profile: 'test' })
+  const out = await h.tools[0].execute({ brief: 'найди X' }, { agent: родитель, signal: new AbortController().signal })
+  assert.equal(out, 'нашёл')
+  assert.equal(h.starts.length, 1)
+  assert.equal(h.starts[0].agentOptions.provider, undefined)
+  assert.equal(h.starts[0].agentOptions.model, undefined)
+  const r = JSON.parse(readFileSync(log, 'utf8').trim())
+  assert.deepEqual([r.provider, r.model, r.fallback], ['deepseek', 'deepseek-v4', 'нет маршрута opencode-go'])
+})
+
+test('scout: своя модель упала до первого шага — повтор на модели родителя, дальше сразу родитель', async () => {
+  const log = join(mkdtempSync(join(tmpdir(), 'scout-')), 'u.jsonl')
+  const { ctx, h } = fakeCtx('нашёл', { падает: 'opencode-go' })
+  apply(ctx, { log, profile: 'test' })
+  const exec = { agent: родитель, signal: new AbortController().signal }
+  assert.equal(await h.tools[0].execute({ brief: 'найди X' }, exec), 'нашёл')
+  assert.deepEqual(h.starts.map(s => s.agentOptions.provider), ['opencode-go', undefined])
+  assert.equal(await h.tools[0].execute({ brief: 'найди Y' }, exec), 'нашёл')
+  assert.equal(h.starts.length, 3)
+  assert.equal(h.starts[2].agentOptions.provider, undefined)
+  const rows = readFileSync(log, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+  assert.deepEqual(rows.map(r => r.stop), ['error', 'completed', 'completed'])
+  assert.match(rows[1].fallback, /opencode-go\/glm-5.3-flash не ответила/)
 })

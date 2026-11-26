@@ -14,7 +14,7 @@ import pytest
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
 USERS = "/Use" + "rs/x"
-ВЕРСИИ = {"meter": "0.1.1", "warm": "0.1.1", "read-cap": "0.1.1", "scout": "0.2.1", "bundle": "0.1.1"}
+ВЕРСИИ = {"meter": "0.1.1", "warm": "0.1.1", "read-cap": "0.1.1", "scout": "0.2.2", "bundle": "0.1.2"}
 РЕПО = {"type": "git", "url": "git+https://github.com/AidamirKaraziev/plexus-dsh.git"}
 
 ПОДДЕЛЬНЫЙ_PNPM = r'''#!/usr/bin/env python3
@@ -45,6 +45,14 @@ with tempfile.TemporaryDirectory() as t:
                 п = os.path.join(корень, ф)
                 if os.path.normpath(п) != "package.json":
                     tar.add(п, "package/" + os.path.normpath(п))
+'''
+
+
+ПОДДЕЛЬНЫЙ_NPM = r'''#!/usr/bin/env python3
+import os, sys
+a = sys.argv[1:]
+if a[:1] == ["view"] and a[1] in os.environ.get("ФЕЙК_В_NPM", "").split():
+    print(a[1].rsplit("@", 1)[1])
 '''
 
 
@@ -80,6 +88,9 @@ class Мир:
         pnpm = бин / "pnpm"
         pnpm.write_text(ПОДДЕЛЬНЫЙ_PNPM)
         pnpm.chmod(pnpm.stat().st_mode | stat.S_IEXEC)
+        npm = бин / "npm"
+        npm.write_text(ПОДДЕЛЬНЫЙ_NPM)
+        npm.chmod(npm.stat().st_mode | stat.S_IEXEC)
         self.журнал = tmp_path / "журнал.txt"
         self.env = dict(os.environ, PATH=f"{бин}:{os.environ['PATH']}", ФЕЙК_ЖУРНАЛ=str(self.журнал),
                         PACKAGES_DIR=str(self.пакеты))
@@ -127,6 +138,22 @@ def test_публикация_в_порядке_зависимостей(мир)
     assert r.returncode == 0, r.stdout + r.stderr
     assert мир.вызовы_publish() == ["plexus-dsh-meter", "plexus-dsh-warm", "plexus-dsh-read-cap",
                                     "plexus-dsh-scout", "plexus-dsh-bundle"]
+
+
+def test_уже_опубликованные_версии_пропускаются(мир):
+    мир.env["ФЕЙК_В_NPM"] = "@plexus-dsh/meter@0.1.1 @plexus-dsh/warm@0.1.1 @plexus-dsh/read-cap@0.1.1"
+    r = мир.запуск("--публиковать")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "@plexus-dsh/meter@0.1.1 уже в npm" in r.stdout
+    assert мир.вызовы_publish() == ["plexus-dsh-scout", "plexus-dsh-bundle"]
+
+
+def test_всё_уже_в_npm_публиковать_нечего(мир):
+    мир.env["ФЕЙК_В_NPM"] = " ".join(f"@plexus-dsh/{п}@{в}" for п, в in ВЕРСИИ.items())
+    r = мир.запуск("--публиковать")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "публиковать нечего" in r.stdout
+    assert мир.вызовы_publish() == []
 
 
 def test_публикация_не_идёт_при_утечке(мир):

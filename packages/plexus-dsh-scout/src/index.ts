@@ -43,7 +43,7 @@ export const name = имя('scout')
 /** `tools` — `scout` и guard; `subagents` — spawn-ребёнок; `systemPrompt` — подсказка родителю. */
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
-const VERSION = '0.2.0'
+const VERSION = '0.2.2'
 
 /**
  * Метка профиля для строки журнала. Явное `config.profile` главнее (tools/bench.py пишет туда свои
@@ -81,8 +81,8 @@ export function ценаМодели(model: string, prices: Record<string, Price
 /** Тип настроек — выход схемы: одно объявление на форму и на валидацию. */
 export type Config = ReturnType<typeof Config>
 export const Config = z.object({
-  provider: z.string().default('opencode-go').description("Провайдер ребёнка"),
-  model: z.string().default('glm-5.3-flash').description("Модель ребёнка"),
+  provider: z.string().default('opencode-go').description("Провайдер ребёнка. Пусто — модель родителя. Нет такого маршрута в DSH — тоже модель родителя."),
+  model: z.string().default('glm-5.3-flash').description("Модель ребёнка. Пусто — модель родителя."),
   subagentProvider: z.string().description("Провайдер ctx.subagents"),
   briefTokens: z.number().step(1).min(1).default(3000).description("Потолок брифа от родителя, токенов"),
   resultTokens: z.number().step(1).min(1).default(2000).description("Потолок итога для родителя, токенов"),
@@ -161,6 +161,39 @@ export function denyForScout(tool: string): string | undefined {
 export function usdOf(u: TokenUsage, p: Price): number {
   return ((u.inputTokens ?? 0) * p[0] + (u.cacheReadTokens ?? 0) * p[1] +
     (u.cacheWriteTokens ?? 0) * p[2] + (u.outputTokens ?? 0) * p[3]) / 1e6
+}
+
+/** Сервис LLM DSH — только список маршрутов. */
+interface LlmService {
+  listProviders(): ReadonlyArray<{ id: string }>
+}
+
+/**
+ * Маршруты провайдеров, зарегистрированные в DSH, или undefined, если узнать нельзя
+ * (тогда маршрут проверит сам запуск ребёнка и запасной путь).
+ */
+export function маршруты(ctx: Pick<Context, 'get'>): Set<string> | undefined {
+  try {
+    const llm = ctx.get('llm' as never) as LlmService | undefined
+    const список = llm?.listProviders?.()
+    return список ? new Set(список.map(p => p.id)) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Чем пускать ребёнка: своей дешёвой моделью или моделью родителя (undefined в agentOptions —
+ * DSH берёт маршрут родителя). У человека может не быть подписки OpenCode Go — тогда маршрута
+ * `opencode-go` в DSH нет, и ребёнок падал «no adapter registered»; разведчик не должен блокировать.
+ */
+export function выборМодели(
+  cfg: { provider?: string; model?: string },
+  есть: Set<string> | undefined,
+): { provider: string; model: string } | { причина: string } {
+  if (!cfg.provider || !cfg.model) return { причина: 'модель не задана' }
+  if (есть && !есть.has(cfg.provider)) return { причина: `нет маршрута ${cfg.provider}` }
+  return { provider: cfg.provider, model: cfg.model }
 }
 
 /** Глубина делегирования агента (как delegationDepthOf в dsh-subagent, без импорта значения). */
@@ -246,15 +279,14 @@ export function apply(ctx: Context, config: Config = Config({})) {
     }
   }
 
-  async function run(args: ScoutArgs, exec: ToolRunContext): Promise<string> {
-    const parent = exec.agent
-    if (!parent) throw new Error('scout: нет вызывающего агента')
-    if (children.has(parent.session.id) || depthOf(parent) > 0) {
-      throw new Error('scout: разведчик не запускает разведчиков — работай сам')
-    }
-    const raw = String(args.brief ?? '').trim()
-    if (!raw) throw new Error('scout: пустой бриф')
-    const brief = clip(raw, cfg.briefTokens, 'бриф')
+  /** Причина, по которой своя модель ребёнка больше не пробуется в этом процессе. */
+  let маршрутСломан: string | undefined
+
+  /** Один запуск ребёнка и строка журнала. `модель` undefined — модель родителя. */
+  async function запуск(
+    parent: Agent, brief: string, raw: string, args: ScoutArgs, exec: ToolRunContext,
+    модель: { provider: string; model: string } | undefined, запасной: string | undefined,
+  ) {
     const started = Date.now()
     const childId = randomUUID()
     const usage: ChildUsage = { steps: 0, usd: 0, inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 }
@@ -268,7 +300,7 @@ export function apply(ctx: Context, config: Config = Config({})) {
         childId: childId as SessionId,
         parent,
         prompt: [{ type: 'text', text: childPrompt(brief, cfg.resultTokens) }],
-        agentOptions: { provider: cfg.provider, model: cfg.model, maxTokens: cfg.childMaxTokens },
+        agentOptions: { ...(модель ?? {}), maxTokens: cfg.childMaxTokens },
         signal: exec.signal,
         delivery: 'caller',
       })
@@ -283,8 +315,10 @@ export function apply(ctx: Context, config: Config = Config({})) {
       children.delete(childId)
     }
 
+    const родитель = модель ? undefined : текущаяМодель(parent)
     const full = result ? textOf(result.output) : ''
     const text = clip(full, cfg.resultTokens, 'итог')
+    const stop = result?.stopReason ?? 'failed'
     record({
       ts: new Date().toISOString(),
       kind: 'scout',
@@ -292,8 +326,9 @@ export function apply(ctx: Context, config: Config = Config({})) {
       profile: профиль(ctx, config.profile),
       session: parent.session.id,
       child: childId,
-      provider: cfg.provider, model: cfg.model,
-      stop: result?.stopReason ?? 'failed',
+      provider: модель?.provider ?? родитель?.provider, model: модель?.model ?? родитель?.model,
+      ...(запасной ? { fallback: запасной } : {}),
+      stop,
       ms: Date.now() - started,
       steps: usage.steps,
       usd: round(usage.usd, 6),
@@ -306,8 +341,31 @@ export function apply(ctx: Context, config: Config = Config({})) {
       resultTokens: tokens(full),
       resultClipped: text !== full,
     })
-    log.info('scout %s: %s, %d шагов, $%s, бриф %d → итог %d ток.', childId, result?.stopReason ?? 'failed',
+    log.info('scout %s: %s, %d шагов, $%s, бриф %d → итог %d ток.', childId, stop,
       usage.steps, round(usage.usd, 6), tokens(raw), tokens(full))
+    return { result, failure, text, stop, steps: usage.steps }
+  }
+
+  async function run(args: ScoutArgs, exec: ToolRunContext): Promise<string> {
+    const parent = exec.agent
+    if (!parent) throw new Error('scout: нет вызывающего агента')
+    if (children.has(parent.session.id) || depthOf(parent) > 0) {
+      throw new Error('scout: разведчик не запускает разведчиков — работай сам')
+    }
+    const raw = String(args.brief ?? '').trim()
+    if (!raw) throw new Error('scout: пустой бриф')
+    const brief = clip(raw, cfg.briefTokens, 'бриф')
+    const выбор = маршрутСломан ? { причина: маршрутСломан } : выборМодели(cfg, маршруты(ctx))
+    let попытка = await запуск(parent, brief, raw, args, exec, 'provider' in выбор ? выбор : undefined,
+      'причина' in выбор && cfg.provider ? выбор.причина : undefined)
+    // Своя модель упала, не сделав ни шага (нет ключа, нет маршрута, регион, нет модели) —
+    // повтор на модели родителя: разведчик дешевле, но не обязателен.
+    if ('provider' in выбор && попытка.stop !== 'completed' && попытка.steps === 0 && !exec.signal?.aborted) {
+      маршрутСломан = `${выбор.provider}/${выбор.model} не ответила`
+      log.warn('scout: %s — дальше модель родителя', маршрутСломан)
+      попытка = await запуск(parent, brief, raw, args, exec, undefined, маршрутСломан)
+    }
+    const { result, failure, text } = попытка
 
     if (failure !== undefined) throw failure
     if (result!.stopReason !== 'completed') {
@@ -356,7 +414,17 @@ export function apply(ctx: Context, config: Config = Config({})) {
     text: (context) => (context.agent && depthOf(context.agent) === 0 && !children.has(context.agent.session.id) ? HINT : ''),
   })
 
-  log.info('scout: %s/%s, бриф ≤ %d, итог ≤ %d ток.', cfg.provider, cfg.model, cfg.briefTokens, cfg.resultTokens)
+  log.info('scout: %s/%s (нет маршрута — модель родителя), бриф ≤ %d, итог ≤ %d ток.', cfg.provider, cfg.model, cfg.briefTokens, cfg.resultTokens)
+}
+
+/** Модель родителя для строки журнала — что DSH выберет для его следующего шага. */
+function текущаяМодель(agent: Agent): { provider?: string; model?: string } | undefined {
+  try {
+    const m = (agent as { model?: { current?: () => { provider: string; model: string } | undefined } }).model?.current?.()
+    if (m) return m
+  } catch { /* нет выбора — смотрим options */ }
+  const o = agent.options as { provider?: string; model?: string } | undefined
+  return o ? { provider: o.provider, model: o.model } : undefined
 }
 
 function round(x: number, digits = 4) {
